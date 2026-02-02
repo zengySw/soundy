@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WAVE - Музыкальный Плеер</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #0a0e1a;
+            --bg-card: #121829;
+            --accent-primary: #00f5a0;
+            --accent-secondary: #00d9f5;
+            --text-primary: #ffffff;
+            --text-secondary: #a0aec0;
+            --gradient-main: linear-gradient(135deg, #00f5a0 0%, #00d9f5 100%);
+            --gradient-bg: radial-gradient(ellipse at top right, rgba(0, 245, 160, 0.15) 0%, transparent 50%),
+                           radial-gradient(ellipse at bottom left, rgba(0, 217, 245, 0.1) 0%, transparent 50%);
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--gradient-bg);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .grain {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.03;
+            pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' /%3E%3C/svg%3E");
+            z-index: 1;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+            z-index: 2;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3rem;
+            animation: slideDown 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .logo {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.5rem;
+            font-weight: 900;
+            background: var(--gradient-main);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.02em;
+        }
+
+        .nav {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .nav-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--gradient-main);
+            transition: width 0.3s ease;
+        }
+
+        .nav-link:hover {
+            color: var(--text-primary);
+        }
+
+        .nav-link:hover::after {
+            width: 100%;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .player-section {
+            animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s backwards;
+        }
+
+        .now-playing-card {
+            background: var(--bg-card);
+            border-radius: 24px;
+            padding: 3rem;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .now-playing-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 100%;
+            height: 100%;
+            background: var(--gradient-main);
+            opacity: 0.1;
+            border-radius: 50%;
+            filter: blur(60px);
+        }
+
+        .album-art-container {
+            position: relative;
+            margin-bottom: 2.5rem;
+            perspective: 1000px;
+        }
+
+        .album-art {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 16px;
+            object-fit: cover;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .album-art:hover {
+            transform: translateY(-8px) rotateX(2deg);
+        }
+
+        .vinyl-overlay {
+            position: absolute;
+            top: 50%;
+            right: -10%;
+            width: 80%;
+            height: 80%;
+            background: radial-gradient(circle, rgba(0, 245, 160, 0.2) 0%, transparent 70%);
+            border-radius: 50%;
+            transform: translateY(-50%);
+            animation: rotate 20s linear infinite;
+            pointer-events: none;
+        }
+
+        @keyframes rotate {
+            from { transform: translateY(-50%) rotate(0deg); }
+            to { transform: translateY(-50%) rotate(360deg); }
+        }
+
+        .track-info {
+            margin-bottom: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .track-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            line-height: 1.2;
+        }
+
+        .track-artist {
+            color: var(--text-secondary);
+            font-size: 1.25rem;
+            font-weight: 500;
+        }
+
+        .progress-container {
+            margin-bottom: 2rem;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            margin-bottom: 0.75rem;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--gradient-main);
+            border-radius: 3px;
+            width: 35%;
+            position: relative;
+            transition: width 0.1s linear;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 14px;
+            height: 14px;
+            background: var(--accent-primary);
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(0, 245, 160, 0.5);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .progress-bar:hover .progress-fill::after {
+            opacity: 1;
+        }
+
+        .time-display {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .control-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-btn:hover {
+            color: var(--accent-primary);
+            transform: scale(1.1);
+        }
+
+        .play-btn {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: var(--gradient-main);
+            box-shadow: 0 8px 20px rgba(0, 245, 160, 0.3);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .play-btn:hover {
+            transform: scale(1.15);
+            box-shadow: 0 12px 30px rgba(0, 245, 160, 0.5);
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .volume-slider {
+            width: 100px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .volume-fill {
+            height: 100%;
+            width: 70%;
+            background: var(--gradient-main);
+            border-radius: 2px;
+        }
+
+        .playlist-section {
+            animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s backwards;
+        }
+
+        .playlist-header {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.75rem;
+            margin-bottom: 1.5rem;
+            font-weight: 700;
+        }
+
+        .playlist {
+            background: var(--bg-card);
+            border-radius: 24px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .playlist::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .playlist::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+        }
+
+        .playlist::-webkit-scrollbar-thumb {
+            background: var(--accent-primary);
+            border-radius: 3px;
+        }
+
+        .playlist-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 0.5rem;
+        }
+
+        .playlist-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateX(4px);
+        }
+
+        .playlist-item.active {
+            background: rgba(0, 245, 160, 0.1);
+        }
+
+        .playlist-item-thumb {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+
+        .playlist-item-info {
+            flex: 1;
+        }
+
+        .playlist-item-title {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            font-size: 0.95rem;
+        }
+
+        .playlist-item-artist {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .playlist-item-duration {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .features-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+            animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.6s backwards;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--gradient-main);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-8px);
+            border-color: rgba(0, 245, 160, 0.3);
+        }
+
+        .feature-card:hover::before {
+            opacity: 0.05;
+        }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--gradient-main);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .feature-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .feature-description {
+            color: var(--text-secondary);
+            line-height: 1.6;
+            position: relative;
+            z-index: 1;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .visualizer {
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            height: 40px;
+            justify-content: center;
+            margin: 1.5rem 0;
+        }
+
+        .visualizer-bar {
+            width: 4px;
+            background: var(--gradient-main);
+            border-radius: 2px;
+            animation: visualize 0.8s ease-in-out infinite;
+        }
+
+        .visualizer-bar:nth-child(1) { animation-delay: 0s; }
+        .visualizer-bar:nth-child(2) { animation-delay: 0.1s; }
+        .visualizer-bar:nth-child(3) { animation-delay: 0.2s; }
+        .visualizer-bar:nth-child(4) { animation-delay: 0.3s; }
+        .visualizer-bar:nth-child(5) { animation-delay: 0.2s; }
+        .visualizer-bar:nth-child(6) { animation-delay: 0.1s; }
+        .visualizer-bar:nth-child(7) { animation-delay: 0s; }
+
+        @keyframes visualize {
+            0%, 100% { height: 10px; }
+            50% { height: 35px; }
+        }
+
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .header {
+                flex-direction: column;
+                gap: 1.5rem;
+                align-items: flex-start;
+            }
+
+            .nav {
+                flex-wrap: wrap;
+                gap: 1rem;
+            }
+
+            .now-playing-card {
+                padding: 2rem;
+            }
+
+            .track-title {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="grain"></div>
+    
+    <div class="container">
+        <header class="header">
+            <div class="logo">WAVE</div>
+            <nav class="nav">
+                <a href="#" class="nav-link">Главная</a>
+                <a href="#" class="nav-link">Открыть</a>
+                <a href="#" class="nav-link">Библиотека</a>
+                <a href="#" class="nav-link">Поиск</a>
+            </nav>
+        </header>
+
+        <div class="main-content">
+            <div class="player-section">
+                <div class="now-playing-card">
+                    <div class="album-art-container">
+                        <img src="data:image/svg+xml,%3Csvg width='400' height='400' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='grad1' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%2300f5a0;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%2300d9f5;stop-opacity:1' /%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='400' height='400' fill='url(%23grad1)'/%3E%3Ccircle cx='200' cy='200' r='120' fill='%23ffffff' opacity='0.1'/%3E%3Ccircle cx='200' cy='200' r='80' fill='%23ffffff' opacity='0.1'/%3E%3Ccircle cx='200' cy='200' r='40' fill='%23ffffff' opacity='0.2'/%3E%3C/svg%3E" alt="Album Art" class="album-art">
+                        <div class="vinyl-overlay"></div>
+                    </div>
+
+                    <div class="track-info">
+                        <h1 class="track-title">Midnight Dreams</h1>
+                        <p class="track-artist">Neon Waves</p>
+                    </div>
+
+                    <div class="visualizer">
+                        <div class="visualizer-bar"></div>
+                        <div class="visualizer-bar"></div>
+                        <div class="visualizer-bar"></div>
+                        <div class="visualizer-bar"></div>
+                        <div class="visualizer-bar"></div>
+                        <div class="visualizer-bar"></div>
+                        <div class="visualizer-bar"></div>
+                    </div>
+
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill"></div>
+                        </div>
+                        <div class="time-display">
+                            <span>1:23</span>
+                            <span>3:45</span>
+                        </div>
+                    </div>
+
+                    <div class="controls">
+                        <button class="control-btn">
+                            <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                            </svg>
+                        </button>
+                        <button class="control-btn play-btn">
+                            <svg width="28" height="28" fill="white" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z"/>
+                            </svg>
+                        </button>
+                        <button class="control-btn">
+                            <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M16 18h2V6h-2zm-11 0l8.5-6L5 6z"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="volume-control">
+                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                        </svg>
+                        <div class="volume-slider">
+                            <div class="volume-fill"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="playlist-section">
+                <h2 class="playlist-header">Очередь</h2>
+                <div class="playlist">
+                    <div class="playlist-item active">
+                        <img src="data:image/svg+xml,%3Csvg width='50' height='50' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='50' height='50' fill='%2300f5a0'/%3E%3C/svg%3E" alt="" class="playlist-item-thumb">
+                        <div class="playlist-item-info">
+                            <div class="playlist-item-title">Midnight Dreams</div>
+                            <div class="playlist-item-artist">Neon Waves</div>
+                        </div>
+                        <div class="playlist-item-duration">3:45</div>
+                    </div>
+                    <div class="playlist-item">
+                        <img src="data:image/svg+xml,%3Csvg width='50' height='50' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='50' height='50' fill='%23ff6b9d'/%3E%3C/svg%3E" alt="" class="playlist-item-thumb">
+                        <div class="playlist-item-info">
+                            <div class="playlist-item-title">Electric Sky</div>
+                            <div class="playlist-item-artist">Cosmic Echo</div>
+                        </div>
+                        <div class="playlist-item-duration">4:12</div>
+                    </div>
+                    <div class="playlist-item">
+                        <img src="data:image/svg+xml,%3Csvg width='50' height='50' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='50' height='50' fill='%23ffd93d'/%3E%3C/svg%3E" alt="" class="playlist-item-thumb">
+                        <div class="playlist-item-info">
+                            <div class="playlist-item-title">Velvet Nights</div>
+                            <div class="playlist-item-artist">Luna Sol</div>
+                        </div>
+                        <div class="playlist-item-duration">3:28</div>
+                    </div>
+                    <div class="playlist-item">
+                        <img src="data:image/svg+xml,%3Csvg width='50' height='50' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='50' height='50' fill='%236c5ce7'/%3E%3C/svg%3E" alt="" class="playlist-item-thumb">
+                        <div class="playlist-item-info">
+                            <div class="playlist-item-title">Neon Pulse</div>
+                            <div class="playlist-item-artist">Synth Dreams</div>
+                        </div>
+                        <div class="playlist-item-duration">5:01</div>
+                    </div>
+                    <div class="playlist-item">
+                        <img src="data:image/svg+xml,%3Csvg width='50' height='50' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='50' height='50' fill='%2300d9f5'/%3E%3C/svg%3E" alt="" class="playlist-item-thumb">
+                        <div class="playlist-item-info">
+                            <div class="playlist-item-title">Crystal Rain</div>
+                            <div class="playlist-item-artist">Aurora Beats</div>
+                        </div>
+                        <div class="playlist-item-duration">3:56</div>
+                    </div>
+                    <div class="playlist-item">
+                        <img src="data:image/svg+xml,%3Csvg width='50' height='50' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='50' height='50' fill='%23fd79a8'/%3E%3C/svg%3E" alt="" class="playlist-item-thumb">
+                        <div class="playlist-item-info">
+                            <div class="playlist-item-title">Starlight Echo</div>
+                            <div class="playlist-item-artist">Digital Horizon</div>
+                        </div>
+                        <div class="playlist-item-duration">4:33</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="features-section">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg width="24" height="24" fill="white" viewBox="0 0 24 24">
+                        <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                    </svg>
+                </div>
+                <h3 class="feature-title">Высокое качество</h3>
+                <p class="feature-description">Наслаждайтесь музыкой в формате lossless до 24-бит/192 кГц</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg width="24" height="24" fill="white" viewBox="0 0 24 24">
+                        <path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM8 20H4v-4h4v4zm0-6H4v-4h4v4zm0-6H4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4z"/>
+                    </svg>
+                </div>
+                <h3 class="feature-title">Умные плейлисты</h3>
+                <p class="feature-description">Персонализированные подборки на основе ваших предпочтений</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg width="24" height="24" fill="white" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                </div>
+                <h3 class="feature-title">Офлайн режим</h3>
+                <p class="feature-description">Скачивайте любимые треки и слушайте без интернета</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Анимация прогресс-бара
+        const progressFill = document.querySelector('.progress-fill');
+        let progress = 35;
+        let isPlaying = false;
+
+        setInterval(() => {
+            if (isPlaying && progress < 100) {
+                progress += 0.2;
+                progressFill.style.width = progress + '%';
+            }
+        }, 100);
+
+        // Управление воспроизведением
+        const playBtn = document.querySelector('.play-btn');
+        const playSvg = playBtn.querySelector('svg');
+
+        playBtn.addEventListener('click', () => {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                playSvg.innerHTML = '<path fill="white" d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>';
+            } else {
+                playSvg.innerHTML = '<path fill="white" d="M8 5v14l11-7z"/>';
+            }
+        });
+
+        // Клик по прогресс-бару
+        const progressBar = document.querySelector('.progress-bar');
+        progressBar.addEventListener('click', (e) => {
+            const rect = progressBar.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            progress = (clickX / rect.width) * 100;
+            progressFill.style.width = progress + '%';
+        });
+
+        // Переключение треков в плейлисте
+        const playlistItems = document.querySelectorAll('.playlist-item');
+        playlistItems.forEach(item => {
+            item.addEventListener('click', () => {
+                playlistItems.forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+                
+                const title = item.querySelector('.playlist-item-title').textContent;
+                const artist = item.querySelector('.playlist-item-artist').textContent;
+                
+                document.querySelector('.track-title').textContent = title;
+                document.querySelector('.track-artist').textContent = artist;
+                
+                progress = 0;
+                progressFill.style.width = '0%';
+            });
+        });
+
+        // Управление громкостью
+        const volumeSlider = document.querySelector('.volume-slider');
+        const volumeFill = document.querySelector('.volume-fill');
+
+        volumeSlider.addEventListener('click', (e) => {
+            const rect = volumeSlider.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const volume = (clickX / rect.width) * 100;
+            volumeFill.style.width = volume + '%';
+        });
+    </script>
+</body>
+</html>
