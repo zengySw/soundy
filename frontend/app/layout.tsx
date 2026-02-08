@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import "./globals.css";
+import { PlayerProvider } from "@/context/PlayerContext";
+import GlobalPlayer from "@/components/player/GlobalPlayer";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -20,7 +22,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru">
-      <body className={outfit.variable}>{children}</body>
+      <body className={outfit.variable}>
+        <PlayerProvider>
+          {children}
+          <GlobalPlayer />
+        </PlayerProvider>
+      </body>
     </html>
   );
 }

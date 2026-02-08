@@ -1,0 +1,11 @@
+IF OBJECT_ID('dbo.albums', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.albums (
+    id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    title NVARCHAR(255) NOT NULL,
+    artist NVARCHAR(255) NULL,
+    year INT NULL,
+    cover_path NVARCHAR(500) NULL,
+    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+  );
+END

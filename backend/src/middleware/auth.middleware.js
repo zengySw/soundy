@@ -1,24 +1,25 @@
-import { verifyAccessToken } from "../utils/token.util.js";
+import { getSessionByToken } from "../service/auth.service.js";
 
-export function authMiddleware(req, res, next) {
+export async function authMiddleware(req, res, next) {
 
     try {
 
-        const header = req.headers.authorization;
+        const sessionToken = req.cookies?.session;
+        if (!sessionToken) {
+            return res.status(401).json({ message: "No session" });
+        }
 
-        if (!header)
-            return res.status(401).json({ message: "No token" });
+        const session = await getSessionByToken(sessionToken);
+        if (!session) {
+            return res.status(401).json({ message: "Invalid session" });
+        }
 
-        const token = header.split(" ")[1];
-
-        const decoded = verifyAccessToken(token);
-
-        req.user = decoded;
+        req.user = { userId: session.userId };
 
         next();
 
     } catch {
 
-        res.status(401).json({ message: "Invalid token" });
+        res.status(401).json({ message: "Invalid session" });
     }
 }

@@ -3,8 +3,8 @@ import { Home, Library, Upload, Heart } from "lucide-react";
 
 export default function Sidebar() {
   return (
-    <aside className="bg-[#13131a] border border-white/8 rounded-2xl py-6 px-4">
-      <nav className="space-y-2">
+    <aside className="sidebar-shell">
+      <nav className="sidebar-nav">
         <Link href="/" className="nav active">
           <Home />
           Главная
