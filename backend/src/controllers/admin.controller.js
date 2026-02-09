@@ -5,7 +5,18 @@ import { randomUUID } from "crypto";
 import { listTracksAdmin, updateTrackPath } from "../service/admin.tracks.service.js";
 import { insertTrack } from "../service/tracks.service.js";
 import { listUsersAdmin, listAdminsAdmin } from "../service/admin.db.service.js";
-import { createAlbum, findAlbumByTitle, listAlbums } from "../service/albums.service.js";
+import {
+  createAlbum,
+  findAlbumByTitle,
+  getAlbumById,
+  listAlbums,
+} from "../service/albums.service.js";
+import {
+  createArtist,
+  ensureTrackArtists,
+  findArtistByName,
+  listArtists,
+} from "../service/artists.service.js";
 import { config } from "../config/env.js";
 
 const TRACKS_BASE_DIR = config.TRACKS_BASE_DIR;
@@ -100,6 +111,20 @@ function getDurationFromFfprobe(output) {
   return Number.isFinite(duration) ? duration : null;
 }
 
+function normalizeArtistList(input) {
+  if (!input) {
+    return [];
+  }
+  return input
+    .replace(/\s+(feat\.?|ft\.?|featuring)\s+/gi, ",")
+    .replace(/\s*&\s*/g, ",")
+    .replace(/\s*;\s*/g, ",")
+    .replace(/\s*\/\s*/g, ",")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 function parseBoolean(value) {
   if (value === true || value === "true" || value === "1" || value === "on") {
     return true;
@@ -165,6 +190,34 @@ export async function adminListAlbums(req, res) {
     res.json(albums);
   } catch (err) {
     console.error("Admin list albums error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+}
+
+export async function adminListArtists(req, res) {
+  try {
+    const artists = await listArtists();
+    res.json(artists);
+  } catch (err) {
+    console.error("Admin list artists error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+}
+
+export async function adminCreateArtist(req, res) {
+  try {
+    const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+    if (!name) {
+      return res.status(400).json({ message: "Artist name required" });
+    }
+    const existing = await findArtistByName(name);
+    if (existing?.id) {
+      return res.status(409).json({ message: "Artist already exists", id: existing.id });
+    }
+    const artist = await createArtist({ name });
+    res.status(201).json(artist);
+  } catch (err) {
+    console.error("Admin create artist error:", err);
     res.status(500).json({ message: "Server error" });
   }
 }
@@ -268,11 +321,47 @@ export async function adminAutoConvert(req, res) {
 export async function adminUploadTrack(req, res) {
   const uploadId = randomUUID();
   const uploadDir = path.join(UPLOADS_DIR, uploadId);
+  const maxAudioBytes = 50 * 1024 * 1024;
+  const maxCoverBytes = 15 * 1024 * 1024;
+
+  async function moveUploadedFile(source, dest) {
+    try {
+      await fs.promises.rename(source, dest);
+    } catch (err) {
+      if (err?.code !== "EXDEV") {
+        throw err;
+      }
+      await fs.promises.copyFile(source, dest);
+      await fs.promises.unlink(source);
+    }
+  }
 
   try {
     const audioFile = req.files?.audio?.[0];
     if (!audioFile) {
       return res.status(400).json({ message: "Audio file required" });
+    }
+    const coverFile = req.files?.cover?.[0];
+
+    const cleanupTempUploads = async () => {
+      const files = [audioFile, coverFile].filter(Boolean);
+      for (const file of files) {
+        try {
+          await fs.promises.unlink(file.path);
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+    };
+
+    if (audioFile.size > maxAudioBytes) {
+      await cleanupTempUploads();
+      return res.status(400).json({ message: "Audio file too large (max 50 MB)." });
+    }
+
+    if (coverFile && coverFile.size > maxCoverBytes) {
+      await cleanupTempUploads();
+      return res.status(400).json({ message: "Cover file too large (max 15 MB)." });
     }
 
     await fs.promises.mkdir(UPLOADS_DIR, { recursive: true });
@@ -280,7 +369,7 @@ export async function adminUploadTrack(req, res) {
 
     const audioExt = path.extname(audioFile.originalname).toLowerCase() || ".bin";
     const sourcePath = path.join(uploadDir, `source${audioExt}`);
-    await fs.promises.rename(audioFile.path, sourcePath);
+    await moveUploadedFile(audioFile.path, sourcePath);
 
     const opusPath = path.join(uploadDir, "music.opus");
     if (audioExt === ".opus") {
@@ -289,11 +378,10 @@ export async function adminUploadTrack(req, res) {
       await runFfmpeg(["-y", "-i", sourcePath, "-c:a", "libopus", "-b:a", "192k", opusPath]);
     }
 
-    const coverFile = req.files?.cover?.[0];
     if (coverFile) {
       const coverExt = path.extname(coverFile.originalname).toLowerCase() || ".jpg";
       const coverSource = path.join(uploadDir, `cover${coverExt}`);
-      await fs.promises.rename(coverFile.path, coverSource);
+      await moveUploadedFile(coverFile.path, coverSource);
       const coverOut = path.join(uploadDir, "cover.webp");
       if (coverExt === ".webp") {
         await fs.promises.copyFile(coverSource, coverOut);
@@ -318,13 +406,16 @@ export async function adminUploadTrack(req, res) {
       ? Number.parseInt(req.body.track_number, 10)
       : null;
 
+    const bodyArtist = typeof req.body?.artist === "string" ? req.body.artist.trim() : "";
+    const bodyAlbumArtist =
+      typeof req.body?.album_artist === "string" ? req.body.album_artist.trim() : "";
+
     let albumId = req.body?.album_id || null;
     if (!albumId) {
       const albumTitle =
         (req.body?.album_title || req.body?.album_name || "").trim();
       if (albumTitle) {
-        const albumArtist =
-          (req.body?.album_artist || req.body?.artist || "").trim();
+        const albumArtist = bodyAlbumArtist || bodyArtist;
         const albumYear = req.body?.album_year
           ? Number.parseInt(req.body.album_year, 10)
           : null;
@@ -354,6 +445,30 @@ export async function adminUploadTrack(req, res) {
     };
 
     await insertTrack(payload);
+
+    const artistCandidates = [bodyArtist, tags.artist, bodyAlbumArtist, tags.album_artist];
+    const artistNames = [];
+    for (const candidate of artistCandidates) {
+      for (const name of normalizeArtistList(candidate)) {
+        if (!artistNames.includes(name)) {
+          artistNames.push(name);
+        }
+      }
+    }
+    if (artistNames.length === 0 && albumId) {
+      const album = await getAlbumById(albumId);
+      const albumArtistName = album?.artist ? String(album.artist) : "";
+      if (albumArtistName) {
+        artistNames.push(...normalizeArtistList(albumArtistName));
+      }
+    }
+    if (artistNames.length > 0) {
+      try {
+        await ensureTrackArtists(payload.id, artistNames);
+      } catch (artistErr) {
+        console.error("Admin upload track artists error:", artistErr);
+      }
+    }
 
     res.status(201).json({
       id: payload.id,

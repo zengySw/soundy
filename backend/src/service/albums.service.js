@@ -1,25 +1,9 @@
 import { poolPromise, sql } from "../db.js";
 import { randomUUID } from "crypto";
-
-let cachedAlbumColumns = null;
+import { getTableColumns, pickColumn } from "./db-meta.js";
 
 async function getAlbumColumns(pool) {
-  if (cachedAlbumColumns) {
-    return cachedAlbumColumns;
-  }
-  const result = await pool.request().query(`
-    SELECT COLUMN_NAME
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_NAME = 'albums'
-  `);
-  cachedAlbumColumns = new Set(
-    result.recordset.map((row) => row.COLUMN_NAME.toLowerCase()),
-  );
-  return cachedAlbumColumns;
-}
-
-function pickColumn(columns, candidates) {
-  return candidates.find((name) => columns.has(name.toLowerCase()));
+  return getTableColumns(pool, "albums");
 }
 
 function applyInput(request, column, value) {
@@ -60,16 +44,44 @@ export async function listAlbums() {
   const coverCol = pickColumn(columns, ["cover_path", "cover_url", "cover"]);
   const createdCol = pickColumn(columns, ["created_at"]);
 
-  const selectColumns = [idCol, titleCol, artistCol, yearCol, coverCol, createdCol].filter(
-    Boolean,
-  );
+  const selectColumns = [
+    idCol,
+    titleCol,
+    artistCol,
+    yearCol,
+    coverCol,
+    createdCol,
+  ].filter(Boolean);
   const orderBy = titleCol || createdCol || idCol;
 
-  const result = await pool.request().query(`
-    SELECT TOP (200) ${selectColumns.join(", ")}
-    FROM albums
-    ORDER BY ${orderBy}
-  `);
+  const trackColumns = await getTableColumns(pool, "tracks");
+  const trackAlbumCol = pickColumn(trackColumns, ["album_id"]);
+  const selectWithAlias = selectColumns.map((col) => `a.${col}`);
+
+  let query = `SELECT TOP (200) ${selectWithAlias.join(", ")}`;
+  if (trackAlbumCol) {
+    query += `
+      , track_counts.track_count
+      , CASE
+          WHEN track_counts.track_count = 1 THEN 'single'
+          WHEN track_counts.track_count > 1 THEN 'album'
+          ELSE NULL
+        END AS release_type
+    `;
+  }
+  query += " FROM albums a";
+  if (trackAlbumCol) {
+    query += `
+      LEFT JOIN (
+        SELECT ${trackAlbumCol} AS album_id, COUNT(*) AS track_count
+        FROM tracks
+        GROUP BY ${trackAlbumCol}
+      ) AS track_counts ON track_counts.album_id = a.${idCol}
+    `;
+  }
+  query += ` ORDER BY a.${orderBy}`;
+
+  const result = await pool.request().query(query);
   return result.recordset;
 }
 
@@ -99,6 +111,41 @@ export async function findAlbumByTitle(title, artist) {
     request.input("artist", sql.NVarChar(255), artist);
   }
   const result = await request.query(query);
+  return result.recordset[0] ?? null;
+}
+
+export async function getAlbumById(id) {
+  if (!id) {
+    return null;
+  }
+  const pool = await poolPromise;
+  const columns = await getAlbumColumns(pool);
+  if (columns.size === 0) {
+    return null;
+  }
+  const idCol = pickColumn(columns, ["id"]);
+  if (!idCol) {
+    return null;
+  }
+  const titleCol = pickColumn(columns, ["title", "name"]);
+  const artistCol = pickColumn(columns, ["artist", "artist_name"]);
+  const selectColumns = [`${idCol} AS id`];
+  if (titleCol) {
+    selectColumns.push(`${titleCol} AS title`);
+  }
+  if (artistCol) {
+    selectColumns.push(`${artistCol} AS artist`);
+  }
+
+  const result = await pool
+    .request()
+    .input("id", sql.UniqueIdentifier, id)
+    .query(`
+      SELECT TOP (1) ${selectColumns.join(", ")}
+      FROM albums
+      WHERE ${idCol} = @id
+    `);
+
   return result.recordset[0] ?? null;
 }
 

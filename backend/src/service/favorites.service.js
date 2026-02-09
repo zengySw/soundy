@@ -2,6 +2,7 @@ import { poolPromise, sql } from "../db.js";
 import { config } from "../config/env.js";
 
 const FAVORITES_PLAYLIST_NAME = config.FAVORITES_PLAYLIST_NAME;
+const FAVORITES_PLAYLIST_DESCRIPTION = "automatically created";
 
 async function getFavoritesPlaylistId(pool, userId) {
   const result = await pool
@@ -15,6 +16,35 @@ async function getFavoritesPlaylistId(pool, userId) {
     `);
 
   return result.recordset[0]?.id ?? null;
+}
+
+export async function ensureFavoritesPlaylist(userId) {
+  const pool = await poolPromise;
+  let playlistId = await getFavoritesPlaylistId(pool, userId);
+  if (playlistId) {
+    return playlistId;
+  }
+
+  await pool
+    .request()
+    .input("owner_id", sql.UniqueIdentifier, userId)
+    .input("playlist_name", sql.NVarChar(255), FAVORITES_PLAYLIST_NAME)
+    .input("description", sql.NVarChar(255), FAVORITES_PLAYLIST_DESCRIPTION)
+    .input("is_public", sql.Bit, 1)
+    .query(`
+      IF NOT EXISTS (
+        SELECT 1
+        FROM playlists
+        WHERE owner_id = @owner_id AND name = @playlist_name
+      )
+      BEGIN
+        INSERT INTO playlists (owner_id, name, description, is_public)
+        VALUES (@owner_id, @playlist_name, @description, @is_public)
+      END
+    `);
+
+  playlistId = await getFavoritesPlaylistId(pool, userId);
+  return playlistId;
 }
 
 export async function listFavoritesByUser(userId) {
@@ -44,7 +74,7 @@ export async function listFavoritesByUser(userId) {
 
 export async function addFavorite(userId, trackId) {
   const pool = await poolPromise;
-  const playlistId = await getFavoritesPlaylistId(pool, userId);
+  const playlistId = await ensureFavoritesPlaylist(userId);
   if (!playlistId) {
     throw new Error("FAVORITES_PLAYLIST_NOT_FOUND");
   }

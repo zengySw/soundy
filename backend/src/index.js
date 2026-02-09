@@ -13,6 +13,7 @@ import usersRoutes from "./routes/users.routes.js";
 import tracksRoutes from "./routes/tracks.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import favoritesRoutes from "./routes/favorites.routes.js";
+import playlistsRoutes from "./routes/playlists.routes.js";
 import standart from "./routes/standart.js"
 
 const app = express();
@@ -46,6 +47,7 @@ app.use("/auth", authRoutes);                      // ← подключаем �
 app.use("/users", usersRoutes);
 app.use("/tracks", tracksRoutes);
 app.use("/favorites", favoritesRoutes);
+app.use("/playlists", playlistsRoutes);
 app.use("/admin", adminRoutes);
 app.use("/", standart)
 
@@ -58,6 +60,11 @@ app.use((req, res) => {
 // обработка ошибок, в том числе multer
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({
+        message: "File too large (audio max 50 MB, cover max 15 MB).",
+      });
+    }
     return res.status(400).json({ message: err.message });
   }
   if (err?.message?.includes("Unsupported")) {

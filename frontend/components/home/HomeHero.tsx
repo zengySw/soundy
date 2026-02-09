@@ -8,7 +8,7 @@ interface HomeHeroProps {
 export default function HomeHero({ isPlaying, onPlayToggle }: HomeHeroProps) {
   return (
     <section className="hero">
-      <div className="hero-content">
+      <div className="hero-content no-select">
         <div className="hero-badge">
           <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />

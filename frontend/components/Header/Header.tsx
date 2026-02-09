@@ -4,12 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { useAuthActions } from "@/hooks/useAuthActions";
 import { useOutsideClick } from "@/hooks/useOutsideClick";
 import { apiFetch } from "@/lib/api";
+import { useRouter } from "next/navigation";
+
 
 export default function Header() {
   const [isAuth, setIsAuth] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const profileRef = useRef<HTMLDivElement | null>(null);
+  const router = useRouter();
+  
   const { goToLogin, goToRegister, goToSettings, goToUserProfile, logout } =
     useAuthActions();
 
@@ -61,7 +65,7 @@ export default function Header() {
 
   return (
     <header className="header">
-      <button className="logo" type="button" onClick={() => window.location.assign("/")}>
+      <button className="logo" type="button" onClick={() => router.push("/")}>
         <div className="logo-mark">
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <g id="SVGRepo_bgCarrier" strokeWidth="0" />

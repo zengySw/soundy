@@ -50,6 +50,16 @@ type AdminAlbum = {
   cover_path?: string | null;
   cover_url?: string | null;
   cover?: string | null;
+  track_count?: number | null;
+  release_type?: "single" | "album" | null;
+};
+
+type AdminArtist = {
+  id: string;
+  name?: string;
+  title?: string;
+  artist?: string;
+  artist_name?: string;
 };
 
 function formatDuration(ms: number | null) {
@@ -62,12 +72,17 @@ function formatDuration(ms: number | null) {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
+function normalizeArtist(value: string) {
+  return value.trim().toLowerCase();
+}
+
 export default function AdminMenuPage() {
   const [admin, setAdmin] = useState<AdminInfo | null>(null);
   const [tracks, setTracks] = useState<AdminTrack[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [admins, setAdmins] = useState<AdminEntry[]>([]);
   const [albums, setAlbums] = useState<AdminAlbum[]>([]);
+  const [artists, setArtists] = useState<AdminArtist[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -103,6 +118,8 @@ export default function AdminMenuPage() {
   const [albumCreateSuccess, setAlbumCreateSuccess] = useState<string | null>(
     null,
   );
+  const [artistCreating, setArtistCreating] = useState(false);
+  const [artistCreateError, setArtistCreateError] = useState<string | null>(null);
   const [uploadForm, setUploadForm] = useState({
     title: "",
     trackNumber: "",
@@ -111,6 +128,23 @@ export default function AdminMenuPage() {
     albumArtist: "",
     albumYear: "",
   });
+  const albumArtistValue = uploadForm.albumArtist.trim();
+  const maxAudioBytes = 50 * 1024 * 1024;
+  const maxCoverBytes = 15 * 1024 * 1024;
+  const knownArtists = useMemo(() => {
+    const set = new Set<string>();
+    artists.forEach((artist) => {
+      const name =
+        artist.name ?? artist.title ?? artist.artist ?? artist.artist_name ?? "";
+      const normalized = normalizeArtist(name);
+      if (normalized) {
+        set.add(normalized);
+      }
+    });
+    return set;
+  }, [artists]);
+  const shouldSuggestArtistCreate =
+    albumArtistValue.length > 0 && !knownArtists.has(normalizeArtist(albumArtistValue));
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -160,7 +194,8 @@ export default function AdminMenuPage() {
         }
         setAdmin(data);
 
-        const [tracksRes, usersRes, adminsRes, albumsRes] = await Promise.all([
+        const [tracksRes, usersRes, adminsRes, albumsRes, artistsRes] =
+          await Promise.all([
           apiFetch("/admin/tracks", {
             headers: { "X-Admin-Otp": otp },
           }),
@@ -171,6 +206,9 @@ export default function AdminMenuPage() {
             headers: { "X-Admin-Otp": otp },
           }),
           apiFetch("/admin/albums", {
+            headers: { "X-Admin-Otp": otp },
+          }),
+          apiFetch("/admin/artists", {
             headers: { "X-Admin-Otp": otp },
           }),
         ]);
@@ -191,17 +229,23 @@ export default function AdminMenuPage() {
           const albumsErr = await albumsRes.json().catch(() => ({}));
           throw new Error(mapAdminError(albumsErr.message));
         }
+        if (!artistsRes.ok) {
+          const artistsErr = await artistsRes.json().catch(() => ({}));
+          throw new Error(mapAdminError(artistsErr.message));
+        }
 
         const tracksData: AdminTrack[] = await tracksRes.json();
         const usersData: AdminUser[] = await usersRes.json();
         const adminsData: AdminEntry[] = await adminsRes.json();
         const albumsData: AdminAlbum[] = await albumsRes.json();
+        const artistsData: AdminArtist[] = await artistsRes.json();
 
         if (mounted) {
           setTracks(tracksData);
           setUsers(usersData);
           setAdmins(adminsData);
           setAlbums(albumsData);
+          setArtists(artistsData);
         }
       } catch (err: any) {
         if (mounted) {
@@ -387,6 +431,40 @@ export default function AdminMenuPage() {
     }
   };
 
+  const handleCreateArtist = async (name: string) => {
+    setArtistCreateError(null);
+    if (!otp) {
+      setArtistCreateError("Введите Admin OTP перед созданием артиста.");
+      return;
+    }
+    if (!name.trim()) {
+      setArtistCreateError("Введите имя артиста.");
+      return;
+    }
+    try {
+      setArtistCreating(true);
+      const res = await apiFetch("/admin/artists", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Otp": otp,
+        },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Ошибка создания артиста");
+      }
+      const created: AdminArtist = await res.json();
+      setArtists((prev) => [created, ...prev]);
+      setArtistCreateError(null);
+    } catch (err: any) {
+      setArtistCreateError(err.message || "Ошибка создания артиста");
+    } finally {
+      setArtistCreating(false);
+    }
+  };
+
   const handleUpload = async (event: React.FormEvent) => {
     event.preventDefault();
     setUploadError(null);
@@ -397,6 +475,14 @@ export default function AdminMenuPage() {
     }
     if (!audioFile) {
       setUploadError("Выберите аудиофайл.");
+      return;
+    }
+    if (audioFile.size > maxAudioBytes) {
+      setUploadError("Аудиофайл слишком большой (макс 50 МБ).");
+      return;
+    }
+    if (coverFile && coverFile.size > maxCoverBytes) {
+      setUploadError("Обложка слишком большая (макс 15 МБ).");
       return;
     }
 
@@ -494,6 +580,15 @@ export default function AdminMenuPage() {
     }
     if (!selectedAlbumId && !uploadForm.albumTitle.trim()) {
       setBatchError("Выберите альбом или укажите его название.");
+      return;
+    }
+    const tooLargeAudio = batchFiles.find((file) => file.size > maxAudioBytes);
+    if (tooLargeAudio) {
+      setBatchError(`Файл ${tooLargeAudio.name} больше 50 МБ.`);
+      return;
+    }
+    if (batchCoverFile && batchCoverFile.size > maxCoverBytes) {
+      setBatchError("Обложка больше 15 МБ.");
       return;
     }
 
@@ -914,6 +1009,8 @@ export default function AdminMenuPage() {
                             <th>Title</th>
                             <th>Artist</th>
                             <th>Year</th>
+                            <th>Type</th>
+                            <th>Tracks</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -923,6 +1020,14 @@ export default function AdminMenuPage() {
                               <td>{album.title ?? album.name ?? "—"}</td>
                               <td>{album.artist ?? album.artist_name ?? "—"}</td>
                               <td>{album.year ?? album.release_year ?? "—"}</td>
+                              <td>
+                                {album.release_type === "single"
+                                  ? "Single"
+                                  : album.release_type === "album"
+                                    ? "Album"
+                                    : "—"}
+                              </td>
+                              <td>{album.track_count ?? "—"}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -941,7 +1046,7 @@ export default function AdminMenuPage() {
                   <form className="admin-upload" onSubmit={handleUpload}>
                     <div className="admin-upload-grid">
                       <label className="admin-upload-field" key={`audio-${uploadResetKey}`}>
-                        <span>Аудиофайл</span>
+                        <span>Аудиофайл (до 50 МБ)</span>
                         <input
                           type="file"
                           accept="audio/*"
@@ -957,7 +1062,7 @@ export default function AdminMenuPage() {
                       </label>
 
                       <label className="admin-upload-field" key={`cover-${uploadResetKey}`}>
-                        <span>Обложка (опционально)</span>
+                        <span>Обложка (до 15 МБ)</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -1027,14 +1132,36 @@ export default function AdminMenuPage() {
                             <input
                               className="admin-input"
                               value={uploadForm.albumArtist}
-                              onChange={(event) =>
+                              onChange={(event) => {
+                                const value = event.target.value;
                                 setUploadForm((prev) => ({
                                   ...prev,
-                                  albumArtist: event.target.value,
-                                }))
-                              }
+                                  albumArtist: value,
+                                }));
+                                if (artistCreateError) {
+                                  setArtistCreateError(null);
+                                }
+                              }}
                               placeholder="Имя артиста"
                             />
+                            {shouldSuggestArtistCreate && (
+                              <span className="admin-upload-hint">
+                                Артист не найден в базе.
+                                <button
+                                  type="button"
+                                  className="admin-inline-button"
+                                  onClick={() => handleCreateArtist(albumArtistValue)}
+                                  disabled={artistCreating}
+                                >
+                                  {artistCreating ? "Создаю..." : "Создать"}
+                                </button>
+                              </span>
+                            )}
+                            {artistCreateError && (
+                              <span className="admin-upload-hint admin-upload-hint--error">
+                                {artistCreateError}
+                              </span>
+                            )}
                           </label>
                           <label className="admin-upload-field">
                             <span>Год (опционально)</span>
@@ -1107,7 +1234,7 @@ export default function AdminMenuPage() {
                     <form onSubmit={handleBatchUpload} className="admin-upload">
                       <div className="admin-upload-grid">
                         <label className="admin-upload-field" key={`batch-audio-${batchResetKey}`}>
-                          <span>Аудиофайлы (несколько)</span>
+                          <span>Аудиофайлы (несколько, до 50 МБ)</span>
                           <input
                             type="file"
                             accept="audio/*"
@@ -1122,7 +1249,7 @@ export default function AdminMenuPage() {
                         </label>
 
                         <label className="admin-upload-field" key={`batch-cover-${batchResetKey}`}>
-                          <span>Общая обложка (опционально)</span>
+                          <span>Общая обложка (до 15 МБ)</span>
                           <input
                             type="file"
                             accept="image/*"

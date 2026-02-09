@@ -1,21 +1,5 @@
 import { poolPromise, sql } from "../db.js";
-
-let cachedTrackColumns = null;
-
-async function getTrackColumns(pool) {
-  if (cachedTrackColumns) {
-    return cachedTrackColumns;
-  }
-  const result = await pool.request().query(`
-    SELECT COLUMN_NAME
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_NAME = 'tracks'
-  `);
-  cachedTrackColumns = new Set(
-    result.recordset.map((row) => row.COLUMN_NAME.toLowerCase()),
-  );
-  return cachedTrackColumns;
-}
+import { getTableColumns, pickColumn } from "./db-meta.js";
 
 function applyInput(request, column, value) {
   switch (column) {
@@ -39,15 +23,61 @@ function applyInput(request, column, value) {
 
 export async function getTracksWithPaths() {
   const pool = await poolPromise;
-  const result = await pool
-    .request()
-    .query(`
-      SELECT TOP (100) id, title, path
-      FROM tracks
-      WHERE path IS NOT NULL
-      ORDER BY NEWID()
-    `);
+  const columns = await getTableColumns(pool, "tracks");
+  const selectColumns = ["t.id", "t.title", "t.path"];
+  if (columns.has("album_id")) {
+    selectColumns.push("t.album_id");
+  }
+  if (columns.has("artist")) {
+    selectColumns.push("t.artist");
+  }
+  if (columns.has("artist_name")) {
+    selectColumns.push("t.artist_name");
+  }
 
+  const albumColumns = await getTableColumns(pool, "albums");
+  const albumTitleCol = pickColumn(albumColumns, ["title", "name"]);
+  const albumArtistCol = pickColumn(albumColumns, ["artist", "artist_name"]);
+
+  const artistColumns = await getTableColumns(pool, "artists");
+  const trackArtistColumns = await getTableColumns(pool, "track_artists");
+  const artistIdCol = pickColumn(artistColumns, ["id", "artist_id"]);
+  const artistNameCol = pickColumn(artistColumns, ["name", "title", "artist", "artist_name"]);
+  const taTrackCol = pickColumn(trackArtistColumns, ["track_id", "trackid"]);
+  const taArtistCol = pickColumn(trackArtistColumns, ["artist_id", "artistid"]);
+  const taMainCol = pickColumn(trackArtistColumns, ["is_main_artist", "is_main"]);
+
+  let query = `SELECT TOP (100) ${selectColumns.join(", ")}`;
+  if (columns.has("album_id") && albumTitleCol) {
+    query += `, a.${albumTitleCol} AS album_title`;
+  }
+  if (columns.has("album_id") && albumArtistCol) {
+    query += `, a.${albumArtistCol} AS album_artist`;
+  }
+  if (artistIdCol && artistNameCol && taTrackCol && taArtistCol) {
+    query += ", artist_lookup.track_artist_name";
+  }
+  query += " FROM tracks t";
+  if (columns.has("album_id")) {
+    query += " LEFT JOIN albums a ON a.id = t.album_id";
+  }
+  if (artistIdCol && artistNameCol && taTrackCol && taArtistCol) {
+    const orderByMain = taMainCol
+      ? `CASE WHEN ta.${taMainCol} = 1 THEN 0 ELSE 1 END`
+      : "0";
+    query += `
+      OUTER APPLY (
+        SELECT TOP (1) ar.${artistNameCol} AS track_artist_name
+        FROM track_artists ta
+        INNER JOIN artists ar ON ar.${artistIdCol} = ta.${taArtistCol}
+        WHERE ta.${taTrackCol} = t.id
+        ORDER BY ${orderByMain}, ar.${artistNameCol}
+      ) AS artist_lookup
+    `;
+  }
+  query += " WHERE t.path IS NOT NULL ORDER BY NEWID()";
+
+  const result = await pool.request().query(query);
   return result.recordset;
 }
 
@@ -67,7 +97,7 @@ export async function getTrackPathById(id) {
 
 export async function insertTrack(payload) {
   const pool = await poolPromise;
-  const columns = await getTrackColumns(pool);
+  const columns = await getTableColumns(pool, "tracks");
   const entries = Object.entries(payload).filter(([key]) =>
     columns.has(key.toLowerCase()),
   );

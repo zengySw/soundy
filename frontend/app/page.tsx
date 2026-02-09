@@ -1,83 +1,64 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { playlists } from "@/data/home";
+import type { CSSProperties } from "react";
 import { usePlayer } from "@/context/PlayerContext";
 import { formatDuration } from "@/utils/format";
 import HomeHero from "@/components/home/HomeHero";
 import HomeSidebar from "@/components/home/HomeSidebar";
 import NowPlayingPanel from "@/components/home/NowPlayingPanel";
 import SectionGrid from "@/components/home/SectionGrid";
+import PlaylistSectionGrid from "@/components/home/PlaylistSectionGrid";
 import Header from "@/components/Header/Header";
+import { useResizableSidebars } from "@/hooks/useResizableSidebars";
 import { apiFetch } from "@/lib/api";
 
 export default function HomePage() {
   const {
     isPlaying,
     currentTrackIndex,
+    currentTrackId,
     hasTrackSelected,
     handleTrackSelect,
     handlePlayToggle,
     handleCardPlay,
+    favoriteIds,
+    toggleFavorite,
     tracks,
+    queue,
+    isLoadingTracks,
   } = usePlayer();
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    let mounted = true;
-    const loadFavorites = async () => {
-      try {
-        const res = await apiFetch("/favorites");
-        if (!res.ok) {
-          return;
-        }
-        const data: Array<{ id: string }> = await res.json();
-        if (mounted) {
-          setFavoriteIds(new Set(data.map((item) => item.id)));
-        }
-      } catch {
-        // ignore
-      }
-    };
-
-    loadFavorites();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const handleToggleFavorite = async (id: string) => {
-    const next = new Set(favoriteIds);
-    const isFav = next.has(id);
-    if (isFav) {
-      next.delete(id);
-      setFavoriteIds(next);
-      await apiFetch(`/favorites/${id}`, {
-        method: "DELETE",
-      });
-      return;
-    }
-    next.add(id);
-    setFavoriteIds(next);
-    await apiFetch(`/favorites/${id}`, {
-      method: "POST",
-    });
-  };
-
-  const queue = useMemo(
+  const {
+    gridRef,
+    leftWidth,
+    rightWidth,
+    onLeftResizeStart,
+    onRightResizeStart,
+  } = useResizableSidebars();
+  const queueItems = useMemo(
     () =>
-      tracks.map((track) => ({
+      queue.map((track) => ({
         id: track.id,
         title: track.title,
         artist: track.artist,
         duration: formatDuration(track.durationMs),
+        cover: track.cover ?? null,
       })),
-    [tracks],
+    [queue],
   );
 
   const currentTrack = useMemo(
-    () => queue[currentTrackIndex] ?? queue[0],
-    [currentTrackIndex, queue],
+    () => queueItems[currentTrackIndex] ?? queueItems[0],
+    [currentTrackIndex, queueItems],
+  );
+
+  const gridStyle = useMemo(
+    () =>
+      ({
+        "--sidebar-left": `${leftWidth}px`,
+        "--sidebar-right": `${rightWidth}px`,
+      }) as CSSProperties,
+    [leftWidth, rightWidth],
   );
 
   const cards = useMemo(
@@ -97,6 +78,68 @@ export default function HomePage() {
     [tracks, favoriteIds],
   );
 
+  const sectionSize = 30;
+  const [playlists, setPlaylists] = useState<Array<{ id: string; name: string; track_count?: number | null }>>([]);
+  const [playlistsLoading, setPlaylistsLoading] = useState(true);
+  const [playlistsError, setPlaylistsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadPlaylists = async () => {
+      try {
+        const res = await apiFetch("/playlists");
+        if (!res.ok) {
+          if (res.status === 401) {
+            setPlaylistsError("Войдите, чтобы видеть плейлисты");
+          } else {
+            setPlaylistsError("Не удалось загрузить плейлисты");
+          }
+          return;
+        }
+        const data = await res.json();
+        if (mounted) {
+          setPlaylists(Array.isArray(data) ? data : []);
+          setPlaylistsError(null);
+        }
+      } catch {
+        if (mounted) {
+          setPlaylistsError("Не удалось загрузить плейлисты");
+        }
+      } finally {
+        if (mounted) {
+          setPlaylistsLoading(false);
+        }
+      }
+    };
+    loadPlaylists();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+  const skeletonCards = useMemo(
+    () =>
+      Array.from({ length: sectionSize * 3 }, (_, index) => ({
+        id: `skeleton-${index}`,
+        title: "",
+        artist: "",
+        cover: null,
+        index,
+        isFavorite: false,
+        isSkeleton: true,
+        gradient:
+          index % 2 === 0
+            ? "linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(139, 92, 246, 0.25) 100%)"
+            : "linear-gradient(135deg, rgba(20, 184, 166, 0.25) 0%, rgba(14, 165, 233, 0.25) 100%)",
+      })),
+    [sectionSize],
+  );
+
+  const displayCards = isLoadingTracks ? skeletonCards : cards;
+  const popularCards = displayCards.slice(0, sectionSize);
+  const forYouCards = displayCards.slice(sectionSize, sectionSize * 2);
+  const newReleaseCards = displayCards.slice(sectionSize * 2, sectionSize * 3);
+  const playlistCards = playlists.slice(0, sectionSize);
+
   return (
     <>
       <div className="bg-gradient" />
@@ -104,39 +147,77 @@ export default function HomePage() {
       <div className="app">
         <Header />
 
-        <div className="main-grid">
-          <HomeSidebar playlists={playlists} />
+        <div className="main-grid" ref={gridRef} style={gridStyle}>
+          <HomeSidebar />
+          <div
+            className="resize-handle resize-handle--left"
+            onPointerDown={onLeftResizeStart}
+            aria-hidden="true"
+          />
 
           <main className="main-content">
             <HomeHero isPlaying={isPlaying} onPlayToggle={handlePlayToggle} />
 
             <SectionGrid
               title="Популярное сейчас"
-              cards={cards.slice(0, 6)}
+              cards={popularCards}
               onCardPlay={handleCardPlay}
-              onToggleFavorite={handleToggleFavorite}
+              onToggleFavorite={toggleFavorite}
               currentTrackIndex={currentTrackIndex}
+              currentTrackId={currentTrackId}
               isPlaying={isPlaying}
               hasTrackSelected={hasTrackSelected}
               onPlayToggle={handlePlayToggle}
             />
 
-            <SectionGrid
-              title="Для вас"
-              cards={cards.slice(6, 12)}
-              onCardPlay={handleCardPlay}
-              onToggleFavorite={handleToggleFavorite}
-              currentTrackIndex={currentTrackIndex}
-              isPlaying={isPlaying}
-              hasTrackSelected={hasTrackSelected}
-              onPlayToggle={handlePlayToggle}
-            />
+            {(isLoadingTracks || forYouCards.length > 0) && (
+              <SectionGrid
+                title="Для вас"
+                cards={forYouCards}
+                onCardPlay={handleCardPlay}
+                onToggleFavorite={toggleFavorite}
+                currentTrackIndex={currentTrackIndex}
+                currentTrackId={currentTrackId}
+                isPlaying={isPlaying}
+                hasTrackSelected={hasTrackSelected}
+                onPlayToggle={handlePlayToggle}
+              />
+            )}
+
+            {(isLoadingTracks || newReleaseCards.length > 0) && (
+              <SectionGrid
+                title="Новые релизы"
+                cards={newReleaseCards}
+                onCardPlay={handleCardPlay}
+                onToggleFavorite={toggleFavorite}
+                currentTrackIndex={currentTrackIndex}
+                currentTrackId={currentTrackId}
+                isPlaying={isPlaying}
+                hasTrackSelected={hasTrackSelected}
+                onPlayToggle={handlePlayToggle}
+              />
+            )}
+
+            {(playlistsLoading || playlistCards.length > 0 || playlistsError) && (
+              <PlaylistSectionGrid
+                title="Плейлисты для вас"
+                playlists={playlistCards}
+                isLoading={playlistsLoading}
+                placeholderCount={sectionSize}
+                emptyText={playlistsError ?? "Пока нет плейлистов"}
+              />
+            )}
           </main>
 
+          <div
+            className="resize-handle resize-handle--right"
+            onPointerDown={onRightResizeStart}
+            aria-hidden="true"
+          />
           {currentTrack ? (
             <NowPlayingPanel
               currentTrack={currentTrack}
-              queue={queue}
+              queue={queueItems}
               currentTrackIndex={currentTrackIndex}
               onTrackSelect={handleTrackSelect}
             />

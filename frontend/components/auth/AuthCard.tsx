@@ -68,7 +68,7 @@ export default function AuthCard({ title, submitText, footerText, footerLink }: 
   };
 
   return (
-    <div className="auth-card">
+    <div className="auth-card ">
       <h1>{title}</h1>
 
       <form onSubmit={handleSubmit}>

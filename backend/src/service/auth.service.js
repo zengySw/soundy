@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import { poolPromise, sql } from "../db.js";
 import { randomUUID } from "crypto";
 import { config } from "../config/env.js";
+import { ensureFavoritesPlaylist } from "./favorites.service.js";
 
 
 // ---------- РЕГИСТРАЦИЯ ----------
@@ -19,7 +20,7 @@ export async function registerUser(data) {
     const passHash = await bcrypt.hash(password, 10);
 
     try {
-        await pool.request()
+        const result = await pool.request()
             .input("username",     sql.NVarChar(50),   username)
             .input("email",        sql.NVarChar(255),  email)
             .input("password_hash", sql.NVarChar(sql.MAX), passHash)
@@ -32,11 +33,17 @@ export async function registerUser(data) {
                     username, email, password_hash, avatar_url,
                     is_premium, country_code, is_active
                 )
+                OUTPUT inserted.id
                 VALUES (
                     @username, @email, @password_hash, @avatar_url,
                     @is_premium, @country_code, @is_active
                 )
             `);
+
+        const userId = result.recordset?.[0]?.id;
+        if (userId) {
+            await ensureFavoritesPlaylist(userId);
+        }
 
         return true;
     } catch (err) {

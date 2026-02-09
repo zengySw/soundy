@@ -66,6 +66,40 @@ function resolveAudioFilePath(fullPath) {
   return null;
 }
 
+function streamAudioFile(req, res, audioPath) {
+  const stat = fs.statSync(audioPath);
+  const fileSize = stat.size;
+  const range = req.headers.range;
+  const ext = path.extname(audioPath).toLowerCase();
+  const contentType =
+    ext === ".opus" || ext === ".ogg" ? "audio/ogg" : "audio/mpeg";
+
+  if (range) {
+    const [startStr, endStr] = range.replace(/bytes=/, "").split("-");
+    const start = parseInt(startStr, 10);
+    const end = endStr ? parseInt(endStr, 10) : fileSize - 1;
+    const chunkSize = end - start + 1;
+
+    res.writeHead(206, {
+      "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+      "Accept-Ranges": "bytes",
+      "Content-Length": chunkSize,
+      "Content-Type": contentType,
+    });
+
+    fs.createReadStream(audioPath, { start, end }).pipe(res);
+    return;
+  }
+
+  res.writeHead(200, {
+    "Content-Length": fileSize,
+    "Content-Type": contentType,
+    "Accept-Ranges": "bytes",
+  });
+
+  fs.createReadStream(audioPath).pipe(res);
+}
+
 function readCoverFromFolder(trackPath) {
   const dir = path.dirname(trackPath);
   for (const filename of COVER_CANDIDATES) {
@@ -87,12 +121,21 @@ function readCoverFromFolder(trackPath) {
 
 function mapMetadata(row, tags, durationSeconds, fallbackCover) {
   const cover = fallbackCover;
+  const artist =
+    tags.artist ||
+    tags.album_artist ||
+    row.track_artist_name ||
+    row.artist ||
+    row.artist_name ||
+    row.album_artist ||
+    "Unknown";
+  const album = tags.album || row.album_title || null;
 
   return {
     id: row.id,
     title: tags.title || row.title || "Unknown",
-    artist: tags.artist || tags.album_artist || "Unknown",
-    album: tags.album || null,
+    artist,
+    album,
     year: tags.date ? Number.parseInt(tags.date, 10) || null : null,
     genre: tags.genre || null,
     durationMs: durationSeconds ? Math.round(durationSeconds * 1000) : null,
@@ -209,39 +252,27 @@ export async function streamTrack(req, res) {
       return res.status(404).json({ message: "Audio file not found" });
     }
 
-    const stat = fs.statSync(audioPath);
-    const fileSize = stat.size;
-    const range = req.headers.range;
-    const ext = path.extname(audioPath).toLowerCase();
-    const contentType =
-      ext === ".opus" || ext === ".ogg" ? "audio/ogg" : "audio/mpeg";
-
-    if (range) {
-      const [startStr, endStr] = range.replace(/bytes=/, "").split("-");
-      const start = parseInt(startStr, 10);
-      const end = endStr ? parseInt(endStr, 10) : fileSize - 1;
-      const chunkSize = end - start + 1;
-
-      res.writeHead(206, {
-        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-        "Accept-Ranges": "bytes",
-        "Content-Length": chunkSize,
-        "Content-Type": contentType,
-      });
-
-      fs.createReadStream(audioPath, { start, end }).pipe(res);
-      return;
-    }
-
-    res.writeHead(200, {
-      "Content-Length": fileSize,
-      "Content-Type": contentType,
-      "Accept-Ranges": "bytes",
-    });
-
-    fs.createReadStream(audioPath).pipe(res);
+    streamAudioFile(req, res, audioPath);
   } catch (err) {
     console.error("Stream track error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+}
+
+export async function streamAd(req, res) {
+  try {
+    const adPath = path.join(TRACKS_BASE_DIR, "ad", "ads.opus");
+    const resolved = resolveTrackPath(adPath);
+    if (!resolved || !fs.existsSync(resolved)) {
+      return res.status(404).json({ message: "Ad not found" });
+    }
+    const audioPath = resolveAudioFilePath(resolved);
+    if (!audioPath) {
+      return res.status(404).json({ message: "Ad audio not found" });
+    }
+    streamAudioFile(req, res, audioPath);
+  } catch (err) {
+    console.error("Stream ad error:", err);
     res.status(500).json({ message: "Server error" });
   }
 }

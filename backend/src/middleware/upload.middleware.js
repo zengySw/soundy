@@ -46,7 +46,7 @@ function fileFilter(req, file, cb) {
 export const upload = multer({
   dest: uploadRoot,
   limits: {
-    fileSize: 200 * 1024 * 1024,
+    fileSize: 50 * 1024 * 1024,
   },
   fileFilter,
 });

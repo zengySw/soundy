@@ -7,4 +7,5 @@ export type Track = {
   genre: string | null;
   durationMs: number | null;
   cover: string | null;
+  isAd?: boolean;
 };

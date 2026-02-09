@@ -15,7 +15,7 @@ export const config = {
     process.env.DB_TRUST_SERVER_CERTIFICATE === undefined
       ? true
       : process.env.DB_TRUST_SERVER_CERTIFICATE === "true",
-  FAVORITES_PLAYLIST_NAME: process.env.FAVORITES_PLAYLIST_NAME || "Favorites",
+  FAVORITES_PLAYLIST_NAME: process.env.FAVORITES_PLAYLIST_NAME || "favorite",
   SESSION_MAX_AGE_DAYS: parseInt(process.env.SESSION_MAX_AGE_DAYS || "7", 10),
   TRACKS_BASE_DIR: process.env.TRACKS_BASE_DIR || "/home/zengy/soundy/database/music",
   

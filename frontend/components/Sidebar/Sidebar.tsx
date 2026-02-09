@@ -13,10 +13,10 @@ export default function Sidebar() {
           <Library />
           Библиотека
         </Link>
-        <div className="nav">
+        <Link href="/favorites" className="nav">
           <Heart />
           Избранное
-        </div>
+        </Link>
         <div className="nav">
           <Upload />
           Загрузить
