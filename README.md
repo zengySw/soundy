@@ -9,3 +9,10 @@ Create local env files from examples:
 cp backend/env.example backend/.env
 cp frontend/env.local.example frontend/.env.local
 ```
+
+Initialize MSSQL schema (code-first):
+
+```bash
+cd backend
+npm run db:init
+```

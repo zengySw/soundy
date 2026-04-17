@@ -1,8 +1,9 @@
 import fs from "fs";
 import path from "path";
 import multer from "multer";
+import { config } from "../config/env.js";
 
-const uploadRoot = "/tmp/soundy-uploads";
+const uploadRoot = config.UPLOAD_TMP_DIR;
 fs.mkdirSync(uploadRoot, { recursive: true });
 
 const AUDIO_EXTENSIONS = new Set([
