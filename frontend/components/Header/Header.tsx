@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { useAuthActions } from "@/hooks/useAuthActions";
@@ -6,61 +6,75 @@ import { useOutsideClick } from "@/hooks/useOutsideClick";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 
-
 export default function Header() {
-  const [isAuth, setIsAuth] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-  const profileRef = useRef<HTMLDivElement | null>(null);
+  const [is_auth, set_is_auth] = useState(false);
+  const [profile_open, set_profile_open] = useState(false);
+  const [user_id, set_user_id] = useState<string | null>(null);
+  const [search_input, set_search_input] = useState("");
+  const profile_ref = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
-  
+
   const { goToLogin, goToRegister, goToSettings, goToUserProfile, logout } =
     useAuthActions();
 
   useEffect(() => {
-    let mounted = true;
-    const loadMe = async () => {
+    let is_mounted = true;
+
+    const load_me = async () => {
       try {
-        const res = await apiFetch("/auth/me");
-        if (!res.ok) {
+        const response = await apiFetch("/auth/me");
+        if (!response.ok) {
           return;
         }
-        const data: { userId?: string } = await res.json();
-        if (mounted && data.userId) {
-          setIsAuth(true);
-          setUserId(data.userId);
+
+        const payload: { user_id?: string; userId?: string } = await response.json();
+        const resolved_user_id = payload.user_id ?? payload.userId;
+
+        if (is_mounted && resolved_user_id) {
+          set_is_auth(true);
+          set_user_id(resolved_user_id);
         }
       } catch {
         // ignore
       }
     };
 
-    loadMe();
+    void load_me();
+
     return () => {
-      mounted = false;
+      is_mounted = false;
     };
   }, []);
 
-  useOutsideClick(profileRef, () => setProfileOpen(false));
+  useOutsideClick(profile_ref, () => set_profile_open(false));
 
-  const handleLogout = () => {
+  const handle_logout = () => {
     logout();
-    setIsAuth(false);
-    setUserId(null);
-    setProfileOpen(false);
+    set_is_auth(false);
+    set_user_id(null);
+    set_profile_open(false);
   };
 
-  const handleProfile = () => {
-    if (!userId) {
+  const handle_profile = () => {
+    if (!user_id) {
       return;
     }
-    goToUserProfile(userId);
-    setProfileOpen(false);
+    goToUserProfile(user_id);
+    set_profile_open(false);
   };
 
-  const handleSettings = () => {
+  const handle_settings = () => {
     goToSettings();
-    setProfileOpen(false);
+    set_profile_open(false);
+  };
+
+  const handle_search_submit = () => {
+    const query_text = search_input.trim();
+    if (!query_text) {
+      router.push("/search");
+      return;
+    }
+    router.push(`/search?q=${encodeURIComponent(query_text)}`);
   };
 
   return (
@@ -83,35 +97,49 @@ export default function Header() {
         </div>
         <div className="logo-text">Soundy</div>
       </button>
+
       <div className="header-right">
         <div className="search-bar">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
           </svg>
-          <input type="text" placeholder="Поиск треков, исполнителей..." />
+          <input
+            type="text"
+            placeholder="Search tracks, artists, playlists"
+            value={search_input}
+            onChange={(event) => set_search_input(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") {
+                return;
+              }
+              event.preventDefault();
+              handle_search_submit();
+            }}
+          />
         </div>
-        <div className="profile-wrapper" ref={profileRef}>
-          <div className="user-profile" onClick={() => setProfileOpen((prev) => !prev)}>
-            {isAuth ? "JD" : "?"}
+
+        <div className="profile-wrapper" ref={profile_ref}>
+          <div className="user-profile" onClick={() => set_profile_open((prev) => !prev)}>
+            {is_auth ? "JD" : "?"}
           </div>
 
-          {profileOpen && (
+          {profile_open && (
             <div className="profile-menu">
-              {isAuth ? (
+              {is_auth ? (
                 <>
                   <button
                     className="profile-item"
-                    onClick={handleProfile}
-                    disabled={!userId}
+                    onClick={handle_profile}
+                    disabled={!user_id}
                   >
-                    Профиль
+                    Profile
                   </button>
-                  <button className="profile-item" onClick={handleSettings}>
-                    Настройки
+                  <button className="profile-item" onClick={handle_settings}>
+                    Settings
                   </button>
                   <div className="divider" />
-                  <button className="profile-item danger" onClick={handleLogout}>
-                    Выйти
+                  <button className="profile-item danger" onClick={handle_logout}>
+                    Logout
                   </button>
                 </>
               ) : (
@@ -120,19 +148,19 @@ export default function Header() {
                     className="profile-item login"
                     onClick={() => {
                       goToLogin();
-                      setProfileOpen(false);
+                      set_profile_open(false);
                     }}
                   >
-                    Войти
+                    Login
                   </button>
                   <button
                     className="profile-item reg"
                     onClick={() => {
                       goToRegister();
-                      setProfileOpen(false);
+                      set_profile_open(false);
                     }}
                   >
-                    Регистрация
+                    Register
                   </button>
                 </>
               )}

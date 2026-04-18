@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
@@ -124,9 +124,9 @@ export default function TrackContextMenu({
         if (!res.ok) {
           if (mounted) {
             if (res.status === 401) {
-              setPlaylistsError("Войдите, чтобы добавлять в плейлисты");
+              setPlaylistsError("Ð’Ð¾Ð¹Ð´Ð¸Ñ‚Ðµ, Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð´Ð¾Ð±Ð°Ð²Ð»ÑÑ‚ÑŒ Ð² Ð¿Ð»ÐµÐ¹Ð»Ð¸ÑÑ‚Ñ‹");
             } else {
-              setPlaylistsError("Не удалось загрузить плейлисты");
+              setPlaylistsError("ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ Ð·Ð°Ð³Ñ€ÑƒÐ·Ð¸Ñ‚ÑŒ Ð¿Ð»ÐµÐ¹Ð»Ð¸ÑÑ‚Ñ‹");
             }
           }
           return;
@@ -138,7 +138,7 @@ export default function TrackContextMenu({
         }
       } catch {
         if (mounted) {
-          setPlaylistsError("Не удалось загрузить плейлисты");
+          setPlaylistsError("ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ Ð·Ð°Ð³Ñ€ÑƒÐ·Ð¸Ñ‚ÑŒ Ð¿Ð»ÐµÐ¹Ð»Ð¸ÑÑ‚Ñ‹");
         }
       } finally {
         if (mounted) {
@@ -177,9 +177,9 @@ export default function TrackContextMenu({
         document.execCommand("copy");
         input.remove();
       }
-      setToastMessage("Скопировано");
+      setToastMessage("Ð¡ÐºÐ¾Ð¿Ð¸Ñ€Ð¾Ð²Ð°Ð½Ð¾");
     } catch {
-      setToastMessage("Не удалось скопировать");
+      setToastMessage("ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ ÑÐºÐ¾Ð¿Ð¸Ñ€Ð¾Ð²Ð°Ñ‚ÑŒ");
     } finally {
       if (toastTimeoutRef.current !== null) {
         window.clearTimeout(toastTimeoutRef.current);
@@ -201,12 +201,12 @@ export default function TrackContextMenu({
         body: JSON.stringify({ trackId: track.id }),
       });
       if (!res.ok) {
-        setActionMessage("Не удалось добавить");
+        setActionMessage("ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ Ð´Ð¾Ð±Ð°Ð²Ð¸Ñ‚ÑŒ");
         return;
       }
       const data = await res.json().catch(() => ({}));
       if (data?.added) {
-        setActionMessage("Добавлено в плейлист");
+        setActionMessage("Ð”Ð¾Ð±Ð°Ð²Ð»ÐµÐ½Ð¾ Ð² Ð¿Ð»ÐµÐ¹Ð»Ð¸ÑÑ‚");
         if (typeof window !== "undefined") {
           window.dispatchEvent(
             new CustomEvent("soundy:playlist-track-added", {
@@ -216,11 +216,11 @@ export default function TrackContextMenu({
         }
         window.setTimeout(onClose, 400);
       } else {
-        setActionMessage("Уже в плейлисте");
+        setActionMessage("Ð£Ð¶Ðµ Ð² Ð¿Ð»ÐµÐ¹Ð»Ð¸ÑÑ‚Ðµ");
         window.setTimeout(onClose, 400);
       }
     } catch {
-      setActionMessage("Не удалось добавить");
+      setActionMessage("ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ Ð´Ð¾Ð±Ð°Ð²Ð¸Ñ‚ÑŒ");
     }
   };
 
@@ -233,7 +233,7 @@ export default function TrackContextMenu({
     return toast;
   }
 
-  const favoriteLabel = isFavorite ? "Убрать из избранного" : "В избранное";
+  const favoriteLabel = isFavorite ? "Ð£Ð±Ñ€Ð°Ñ‚ÑŒ Ð¸Ð· Ð¸Ð·Ð±Ñ€Ð°Ð½Ð½Ð¾Ð³Ð¾" : "Ð’ Ð¸Ð·Ð±Ñ€Ð°Ð½Ð½Ð¾Ðµ";
 
   const menu = (
     <div
@@ -254,7 +254,7 @@ export default function TrackContextMenu({
           onClose();
         }}
       >
-        Воспроизвести
+        Ð’Ð¾ÑÐ¿Ñ€Ð¾Ð¸Ð·Ð²ÐµÑÑ‚Ð¸
       </button>
       {onToggleFavorite ? (
         <button
@@ -274,17 +274,17 @@ export default function TrackContextMenu({
           className="track-context-item"
           onClick={() => setShowPlaylists((prev) => !prev)}
         >
-          Добавить в плейлист
+          Ð”Ð¾Ð±Ð°Ð²Ð¸Ñ‚ÑŒ Ð² Ð¿Ð»ÐµÐ¹Ð»Ð¸ÑÑ‚
         </button>
       ) : null}
       {showPlaylists ? (
         <div className="track-context-submenu">
           {playlistsLoading ? (
-            <div className="track-context-hint">Загружаю...</div>
+            <div className="track-context-hint">Ð—Ð°Ð³Ñ€ÑƒÐ¶Ð°ÑŽ...</div>
           ) : playlistsError ? (
             <div className="track-context-hint error">{playlistsError}</div>
           ) : playlists.length === 0 ? (
-            <div className="track-context-hint">Плейлистов пока нет</div>
+            <div className="track-context-hint">ÐŸÐ»ÐµÐ¹Ð»Ð¸ÑÑ‚Ð¾Ð² Ð¿Ð¾ÐºÐ° Ð½ÐµÑ‚</div>
           ) : (
             playlists.map((playlist) => (
               <button
@@ -300,7 +300,7 @@ export default function TrackContextMenu({
         </div>
       ) : null}
       <button type="button" className="track-context-item" onClick={handleShare}>
-        Поделиться
+        ÐŸÐ¾Ð´ÐµÐ»Ð¸Ñ‚ÑŒÑÑ
       </button>
       {onRemove && removeLabel ? (
         <button
@@ -325,3 +325,4 @@ export default function TrackContextMenu({
     </>
   );
 }
+

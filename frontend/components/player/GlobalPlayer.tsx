@@ -8,7 +8,6 @@ import { formatDuration } from "@/utils/format";
 export default function GlobalPlayer() {
   const {
     isPlaying,
-    progress,
     volume,
     isMuted,
     currentTrackIndex,
@@ -25,10 +24,8 @@ export default function GlobalPlayer() {
     allowSharePlaybackAsGuest,
     dismissSharePrompt,
     needsUserGesture,
-    progressRef,
-    volumeRef,
-    handleProgressClick,
-    handleVolumeClick,
+    currentAudioUrl,
+    handleSeekTo,
     handleVolumeChange,
     handleMuteToggle,
     handlePlayToggle,
@@ -87,14 +84,9 @@ export default function GlobalPlayer() {
       <PlayerBar
         currentTrack={currentTrack}
         isPlaying={isPlaying}
-        progress={progress}
         volume={volume}
         isMuted={isMuted}
-        progressRef={progressRef}
-        volumeRef={volumeRef}
         onPlayToggle={handlePlayToggle}
-        onProgressClick={handleProgressClick}
-        onVolumeClick={handleVolumeClick}
         onVolumeChange={handleVolumeChange}
         onMuteToggle={handleMuteToggle}
         onNext={handleNext}
@@ -107,6 +99,9 @@ export default function GlobalPlayer() {
         currentTrack ? () => toggleFavorite(currentTrack.id) : undefined
       }
       needsUserGesture={needsUserGesture}
+      audio_url={currentAudioUrl}
+      current_time={currentTimeMs / 1000}
+      on_seek={handleSeekTo}
     />
 
       {sharePromptOpen ? (

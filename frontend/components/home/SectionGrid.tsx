@@ -3,6 +3,7 @@
 import type { CSSProperties, DragEvent, MouseEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCoverGlow } from "@/hooks/useCoverGlow";
+import { use_track_preview } from "@/hooks/use_track_preview";
 import TrackContextMenu from "@/components/tracks/TrackContextMenu";
 
 interface SectionGridProps {
@@ -203,6 +204,19 @@ function TrackCard({
       ? currentTrackId === card.id
       : Boolean(hasTrackSelected) && currentTrackIndex === card.index;
   const isCardPlaying = isActive && Boolean(isPlaying);
+  const {
+    on_mouse_enter,
+    on_mouse_leave,
+    is_preview_loading,
+    is_preview_playing,
+  } = use_track_preview({
+    track_id: isSkeleton ? null : card.id,
+    enabled: !isSkeleton && !isCardPlaying,
+    preview_start_sec: 30,
+    hover_delay_ms: 800,
+    fade_in_ms: 300,
+    fade_out_ms: 200,
+  });
   const handleSelect = () => {
     if (isSkeleton) {
       return;
@@ -242,6 +256,8 @@ function TrackCard({
       className={`card${isSkeleton ? " card--skeleton" : ""}`}
       onClick={isSkeleton ? undefined : handleSelect}
       onContextMenu={(event) => onContextMenu(event, card)}
+      onMouseEnter={on_mouse_enter}
+      onMouseLeave={on_mouse_leave}
       draggable={!isSkeleton}
       onDragStart={handleDragStart}
     >
@@ -255,6 +271,17 @@ function TrackCard({
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
           </svg>
+        )}
+        {!isSkeleton && (is_preview_playing || is_preview_loading) && (
+          <div
+            className={`card-preview-bars${is_preview_loading ? " is-loading" : ""}`}
+            aria-hidden="true"
+          >
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
         )}
         {!isSkeleton && (
           <button

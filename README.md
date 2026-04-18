@@ -10,7 +10,7 @@ cp backend/env.example backend/.env
 cp frontend/env.local.example frontend/.env.local
 ```
 
-Initialize MSSQL schema (code-first):
+Initialize PostgreSQL schema:
 
 ```bash
 cd backend

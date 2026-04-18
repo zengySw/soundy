@@ -37,6 +37,7 @@ export function usePlayerControls() {
   const [sharePromptOpen, setSharePromptOpen] = useState(false);
   const [shareGuestAllowed, setShareGuestAllowed] = useState(false);
   const [needsUserGesture, setNeedsUserGesture] = useState(false);
+  const [currentAudioUrl, setCurrentAudioUrl] = useState<string | null>(null);
   const progressRef = useRef<HTMLDivElement | null>(null);
   const volumeRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -372,6 +373,7 @@ export function usePlayerControls() {
         URL.revokeObjectURL(objectUrlRef.current);
       }
       objectUrlRef.current = url;
+      setCurrentAudioUrl(url);
       audioRef.current.src = url;
       await safePlay();
     } catch (err) {
@@ -395,6 +397,21 @@ export function usePlayerControls() {
     },
     [],
   );
+
+  const handleSeekTo = useCallback((targetTimeSeconds: number) => {
+    if (!audioRef.current) {
+      return;
+    }
+    const audio = audioRef.current;
+    const duration = audio.duration;
+    if (!Number.isFinite(duration) || duration <= 0) {
+      return;
+    }
+    const safeTarget = Math.min(Math.max(targetTimeSeconds, 0), duration);
+    audio.currentTime = safeTarget;
+    setCurrentTimeMs(Math.round(safeTarget * 1000));
+    setProgress((safeTarget / duration) * 100);
+  }, []);
 
   const handleVolumeClick = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
@@ -762,9 +779,11 @@ export function usePlayerControls() {
     sharePromptOpen,
     allowSharePlaybackAsGuest,
     dismissSharePrompt,
+    currentAudioUrl,
     progressRef,
     volumeRef,
     handleProgressClick,
+    handleSeekTo,
     handleVolumeClick,
     handleVolumeChange,
     handleMuteToggle,

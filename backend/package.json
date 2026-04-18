@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "node src/index.js",
+    "dev:stage_1": "tsx watch src/index_stage_1.ts",
     "start": "node src/index.js",
+    "start:stage_1": "tsx src/index_stage_1.ts",
+    "typecheck": "tsc --noEmit",
     "db:init": "node src/scripts/db-init.js"
   },
   "dependencies": {
@@ -15,9 +18,11 @@
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
     "joi": "^18.0.2",
-    "mssql": "^12.2.0",
+    "jsonwebtoken": "^9.0.3",
     "multer": "^1.4.5-lts.1",
-    "music-metadata": "^11.11.2"
+    "music-metadata": "^11.11.2",
+    "pg": "^8.16.3",
+    "socket.io": "^4.8.3"
   },
   "description": "",
   "main": "index.js",
@@ -25,6 +30,14 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "nodemon": "^3.1.11"
+    "@types/bcrypt": "^6.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^25.6.0",
+    "@types/pg": "^8.20.0",
+    "nodemon": "^3.1.11",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
   }
 }

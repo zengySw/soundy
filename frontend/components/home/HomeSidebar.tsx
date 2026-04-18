@@ -335,6 +335,15 @@ export default function HomeSidebar() {
           </svg>
           <span>Библиотека</span>
         </Link>
+        <Link
+          href="/artist/analytics"
+          className={`nav-item${isActive("/artist/analytics") ? " active" : ""}`}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 19h16v2H2V3h2v16zm3-3H5v-6h2v6zm4 0H9V7h2v9zm4 0h-2V4h2v12zm4 0h-2v-8h2v8z" />
+          </svg>
+          <span>Analytics</span>
+        </Link>
       </div>
 
       <div className="playlists">
