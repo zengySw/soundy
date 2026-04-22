@@ -10,7 +10,13 @@ import authRoutes from "./routes/auth.routes.js";
 import usersRoutes from "./routes/users.routes.js";
 import searchRoutes from "./routes/search.routes.js";
 import recommendationsRoutes from "./routes/recommendations.routes.js";
+import tracksRoutes from "./routes/tracks.routes.js";
+import favoritesRoutes from "./routes/favorites.routes.js";
+import playlistsRoutes from "./routes/playlists.routes.js";
+import artistAnalyticsRoutes from "./routes/artist_analytics.routes.js";
+import adminRoutes from "./routes/admin.routes.js";
 import standart from "./routes/standart.js";
+import { initAdminOtp } from "./utils/admin-otp.util.js";
 
 const app = express();
 
@@ -40,8 +46,14 @@ app.use("/api/auth", authRoutes);
 app.use("/auth", authRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/users", usersRoutes);
+app.use("/tracks", tracksRoutes);
+app.use("/favorites", favoritesRoutes);
+app.use("/playlists", playlistsRoutes);
+app.use("/api/playlists", playlistsRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/recommendations", recommendationsRoutes);
+app.use("/api/artist/analytics", artistAnalyticsRoutes);
+app.use("/admin", adminRoutes);
 app.use("/", standart);
 
 app.use((req, res) => {
@@ -61,6 +73,8 @@ app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
   res.status(500).json({ message: "Server error" });
 });
+
+initAdminOtp();
 
 app.listen(config.PORT, () => {
   console.log(`Backend running on http://localhost:${config.PORT}`);

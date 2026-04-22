@@ -7,6 +7,8 @@ import {
 
 const pg_table_columns_cache = new Map();
 let pgvector_checked = false;
+let pgvector_available = false;
+let pgvector_warning_logged = false;
 
 function pick_column(columns, candidates) {
   for (const column_name of candidates) {
@@ -40,10 +42,26 @@ async function get_pg_table_columns(table_name) {
 
 async function ensure_pgvector_extension() {
   if (pgvector_checked) {
-    return;
+    return pgvector_available;
   }
-  await pg_query(`CREATE EXTENSION IF NOT EXISTS vector`);
+  try {
+    await pg_query(`CREATE EXTENSION IF NOT EXISTS vector`);
+    pgvector_available = true;
+  } catch (error) {
+    // PostgreSQL installed without pgvector package.
+    // In this case we gracefully disable embedding-based recommendations.
+    if (error?.code === "0A000" || /extension\s+"?vector"?/i.test(String(error?.message))) {
+      pgvector_available = false;
+      if (!pgvector_warning_logged) {
+        console.warn("pgvector extension is unavailable; recommendations fallback is enabled.");
+        pgvector_warning_logged = true;
+      }
+    } else {
+      throw error;
+    }
+  }
   pgvector_checked = true;
+  return pgvector_available;
 }
 
 function to_number(value) {
@@ -64,7 +82,14 @@ export async function save_track_embedding({
   artist,
   genre,
 }) {
-  await ensure_pgvector_extension();
+  const vector_enabled = await ensure_pgvector_extension();
+  if (!vector_enabled) {
+    return {
+      embedding_values_count: 0,
+      updated_rows: 0,
+      skipped_reason: "PGVECTOR_UNAVAILABLE",
+    };
+  }
 
   const tracks_columns = await get_pg_table_columns("tracks");
   if (tracks_columns.size === 0) {
@@ -124,7 +149,10 @@ export async function save_track_embedding({
 }
 
 export async function get_recommendations_for_user(user_id) {
-  await ensure_pgvector_extension();
+  const vector_enabled = await ensure_pgvector_extension();
+  if (!vector_enabled) {
+    return [];
+  }
 
   const tracks_columns = await get_pg_table_columns("tracks");
   if (tracks_columns.size === 0) {
@@ -162,7 +190,7 @@ export async function get_recommendations_for_user(user_id) {
     !events_track_id_column ||
     !events_played_at_column
   ) {
-    throw new Error("PG_RECOMMENDATIONS_SCHEMA_MISSING_COLUMNS");
+    return [];
   }
 
   const recommendations_limit = Math.max(config.RECOMMENDATIONS_LIMIT || 20, 1);

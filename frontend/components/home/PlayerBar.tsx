@@ -4,7 +4,6 @@ import type { CSSProperties, DragEvent, MouseEvent } from "react";
 import { useState } from "react";
 import { useCoverGlow } from "@/hooks/useCoverGlow";
 import TrackContextMenu from "@/components/tracks/TrackContextMenu";
-import WaveformPlayer from "@/components/player/waveform_player";
 
 interface PlayerBarProps {
   currentTrack: {
@@ -153,11 +152,6 @@ export default function PlayerBar({
             <span className="time">
               {currentTrack ? currentTrack.currentTime : "0:00"}
             </span>
-            <WaveformPlayer
-              audio_url={audio_url}
-              current_time={current_time}
-              on_seek={on_seek}
-            />
             <span className="time">{currentTrack ? currentTrack.duration : "0:00"}</span>
           </div>
           {needsUserGesture && !isPlaying ? (

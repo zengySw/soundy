@@ -10,6 +10,7 @@ const project_root = path.resolve(__dirname, "../../..");
 const migration_files = [
   "database/auth_stage_1.postgres.sql",
   "database/users_theme_config.postgres.sql",
+  "database/catalog_core.postgres.sql",
   "database/listening_events.postgres.sql",
   "database/playlist_collaboration.postgres.sql",
   "database/search_tsvector.postgres.sql",
