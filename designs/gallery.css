@@ -1,0 +1,153 @@
+:root {
+  --bg: #f5f1ea;
+  --text: #1a1a1a;
+  --card: #ffffff;
+  --line: #ddd1c2;
+  --accent: #f7654a;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Outfit", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 20% 20%, #ffe2cc 0%, transparent 45%),
+    radial-gradient(circle at 90% 15%, #f9e8d6 0%, transparent 50%),
+    var(--bg);
+}
+
+.page {
+  min-height: 100vh;
+  width: min(1100px, 92vw);
+  margin: 0 auto;
+  padding: 64px 0 72px;
+}
+
+.hero {
+  margin-bottom: 36px;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-weight: 700;
+  font-size: 0.74rem;
+  color: #7f6f5f;
+  margin: 0 0 12px;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3.3rem);
+  line-height: 1.05;
+}
+
+.subtitle {
+  margin: 14px 0 0;
+  max-width: 620px;
+  color: #534b44;
+  font-size: 1.06rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 18px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 10px 20px rgba(102, 83, 60, 0.07);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 32px rgba(102, 83, 60, 0.14);
+}
+
+.tag {
+  margin: 0;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  color: #9b8b7d;
+}
+
+h2 {
+  margin: 0;
+  font-size: 1.42rem;
+  line-height: 1.15;
+}
+
+.card p {
+  margin: 0;
+  color: #51483f;
+}
+
+a {
+  margin-top: auto;
+  width: fit-content;
+  text-decoration: none;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 10px 16px;
+}
+
+a:hover {
+  background: #dd4b33;
+}
+
+.next {
+  margin-top: 20px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.next h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.next p {
+  margin: 8px 0 14px;
+  color: #534b44;
+}
+
+.link-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ideas-link {
+  background: #2a2a2a;
+}
+
+.ideas-link:hover {
+  background: #171717;
+}
+
+.pack-link {
+  background: #f7654a;
+}
+
+.pack-link:hover {
+  background: #dd4b33;
+}
