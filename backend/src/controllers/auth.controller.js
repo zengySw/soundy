@@ -1,6 +1,8 @@
 import { registerUser, loginUser, getSessionByToken, deleteSession } from "../service/auth.service.js";
 import { config } from "../config/env.js";
 import { registerSchema } from "../validators/auth.validator.js";
+import { send_api_error } from "../utils/api-response.util.js";
+import { is_database_unavailable_error } from "../utils/database-error.util.js";
 
 
 // ---------- REGISTER ----------
@@ -11,18 +13,30 @@ export async function register(req, res) {
         const { error, value } = registerSchema.validate(req.body);
 
         if (error)
-            return res.status(400).json({ message: error.message });
+            return send_api_error(res, {
+                status: 400,
+                code: "REGISTER_VALIDATION_FAILED",
+                message: error.message
+            });
 
         await registerUser(value);
 
-        res.status(201).json({ message: "User created" });
+        res.status(201).json({ ok: true, message: "User created" });
 
     } catch (err) {
 
         if (err.message === "EMAIL_EXISTS")
-            return res.status(409).json({ message: "Email already exists" });
+            return send_api_error(res, {
+                status: 409,
+                code: "EMAIL_EXISTS",
+                message: "Email already exists"
+            });
 
-        res.status(500).json({ message: "Server error" });
+        return send_api_error(res, {
+            status: 500,
+            code: "REGISTER_FAILED",
+            message: "Server error"
+        });
     }
 }
 
@@ -48,9 +62,20 @@ export async function login(req, res) {
 
         res.json({ userId });
 
-    } catch {
+    } catch (error) {
+        if (is_database_unavailable_error(error)) {
+            return send_api_error(res, {
+                status: 503,
+                code: "DB_UNAVAILABLE",
+                message: "Database unavailable"
+            });
+        }
 
-        res.status(401).json({ message: "Invalid credentials" });
+        return send_api_error(res, {
+            status: 401,
+            code: "INVALID_CREDENTIALS",
+            message: "Invalid credentials"
+        });
     }
 }
 
@@ -58,15 +83,34 @@ export async function me(req, res) {
     try {
         const sessionToken = req.cookies?.session;
         if (!sessionToken) {
-            return res.status(401).json({ message: "No session" });
+            return send_api_error(res, {
+                status: 401,
+                code: "NO_SESSION",
+                message: "No session"
+            });
         }
         const session = await getSessionByToken(sessionToken);
         if (!session) {
-            return res.status(401).json({ message: "Invalid session" });
+            return send_api_error(res, {
+                status: 401,
+                code: "INVALID_SESSION",
+                message: "Invalid session"
+            });
         }
-        res.json({ userId: session.userId });
-    } catch {
-        res.status(401).json({ message: "Invalid session" });
+        return res.json({ userId: session.userId });
+    } catch (error) {
+        if (is_database_unavailable_error(error)) {
+            return send_api_error(res, {
+                status: 503,
+                code: "DB_UNAVAILABLE",
+                message: "Database unavailable"
+            });
+        }
+        return send_api_error(res, {
+            status: 401,
+            code: "INVALID_SESSION",
+            message: "Invalid session"
+        });
     }
 }
 
@@ -77,8 +121,12 @@ export async function logout(req, res) {
             await deleteSession(sessionToken);
         }
         res.clearCookie("session");
-        res.json({ message: "Logged out" });
+        return res.json({ ok: true, message: "Logged out" });
     } catch {
-        res.status(500).json({ message: "Server error" });
+        return send_api_error(res, {
+            status: 500,
+            code: "LOGOUT_FAILED",
+            message: "Server error"
+        });
     }
 }

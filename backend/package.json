@@ -9,6 +9,7 @@
     "start": "node src/index.js",
     "start:stage_1": "tsx src/index_stage_1.ts",
     "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-test-isolation=none",
     "db:init": "node src/scripts/db-init.js"
   },
   "dependencies": {

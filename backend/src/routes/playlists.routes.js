@@ -5,6 +5,7 @@ import {
   get_playlist_by_id,
   get_playlists,
   post_playlist,
+  post_playlist_invite_accept,
   post_playlist_invite,
   post_playlist_track,
   put_playlist_reorder,
@@ -14,6 +15,7 @@ const router = Router();
 
 router.get("/", authMiddleware, get_playlists);
 router.post("/", authMiddleware, post_playlist);
+router.post("/invites/:token/accept", authMiddleware, post_playlist_invite_accept);
 router.get("/:id", authMiddleware, get_playlist_by_id);
 router.post("/:id/tracks", authMiddleware, post_playlist_track);
 router.delete("/:id/tracks/:trackId", authMiddleware, delete_playlist_track);

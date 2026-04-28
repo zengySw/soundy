@@ -2,8 +2,11 @@ import fs from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 import { parseFile } from "music-metadata";
-import { config } from "../config/env.js";
 import { pg_query } from "../db_pg.js";
+import {
+  normalize_media_key,
+  upload_temp_file_to_media_storage,
+} from "../service/media_storage.service.js";
 
 const max_cover_size_bytes = 15 * 1024 * 1024;
 
@@ -29,7 +32,7 @@ function normalize_boolean(value) {
 }
 
 function normalize_relative_path(file_path) {
-  return String(file_path || "").replace(/\\/g, "/").replace(/^\/+/, "");
+  return normalize_media_key(file_path);
 }
 
 async function remove_file_silent(file_path) {
@@ -40,16 +43,6 @@ async function remove_file_silent(file_path) {
     await fs.unlink(file_path);
   } catch {
     // no-op
-  }
-}
-
-async function move_file(source_path, target_path) {
-  await fs.mkdir(path.dirname(target_path), { recursive: true });
-  try {
-    await fs.rename(source_path, target_path);
-  } catch {
-    await fs.copyFile(source_path, target_path);
-    await remove_file_silent(source_path);
   }
 }
 
@@ -336,28 +329,40 @@ export async function post_admin_track_upload(req, res) {
       throw new Error("COVER_TOO_LARGE");
     }
 
-    const track_folder_id = randomUUID();
-    const target_dir = path.join(config.TRACKS_BASE_DIR, "uploads", track_folder_id);
-    await fs.mkdir(target_dir, { recursive: true });
-
     const audio_ext = (path.extname(audio_upload.originalname) || ".bin").toLowerCase();
     const target_audio_name = audio_ext === ".opus" ? "music.opus" : `source${audio_ext}`;
-    const target_audio_path = path.join(target_dir, target_audio_name);
-    await move_file(audio_upload.path, target_audio_path);
+    const track_folder_id = randomUUID();
+    const track_relative_path = normalize_relative_path(
+      path.join("uploads", track_folder_id, target_audio_name),
+    );
 
-    let target_cover_name = null;
+    let cover_relative_path = null;
     if (cover_upload) {
       const cover_ext = (path.extname(cover_upload.originalname) || ".jpg").toLowerCase();
-      target_cover_name = `cover${cover_ext}`;
-      const target_cover_path = path.join(target_dir, target_cover_name);
-      await move_file(cover_upload.path, target_cover_path);
+      const target_cover_name = `cover${cover_ext}`;
+      cover_relative_path = normalize_relative_path(
+        path.join("uploads", track_folder_id, target_cover_name),
+      );
     }
 
     let metadata = null;
     try {
-      metadata = await parseFile(target_audio_path);
+      metadata = await parseFile(audio_upload.path);
     } catch {
       metadata = null;
+    }
+
+    await upload_temp_file_to_media_storage({
+      temp_file_path: audio_upload.path,
+      media_key: track_relative_path,
+      content_type: String(audio_upload.mimetype || "").trim(),
+    });
+    if (cover_upload && cover_relative_path) {
+      await upload_temp_file_to_media_storage({
+        temp_file_path: cover_upload.path,
+        media_key: cover_relative_path,
+        content_type: String(cover_upload.mimetype || "").trim(),
+      });
     }
 
     const title =
@@ -392,13 +397,6 @@ export async function post_admin_track_upload(req, res) {
       album_year: req.body?.album_year,
     });
     const artist_id = await ensure_artist_id(artist);
-
-    const track_relative_path = normalize_relative_path(
-      path.join("uploads", track_folder_id, target_audio_name),
-    );
-    const cover_relative_path = target_cover_name
-      ? normalize_relative_path(path.join("uploads", track_folder_id, target_cover_name))
-      : null;
 
     const insert_result = await pg_query(
       `
@@ -452,6 +450,11 @@ export async function post_admin_track_upload(req, res) {
 
     if (error?.message === "COVER_TOO_LARGE") {
       return res.status(400).json({ message: "Cover file too large (max 15 MB)." });
+    }
+    if (error?.message === "R2_UPLOAD_CONFIG_MISSING") {
+      return res.status(500).json({
+        message: "R2 upload config is incomplete",
+      });
     }
 
     console.error("Admin upload track error:", error);

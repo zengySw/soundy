@@ -3,7 +3,7 @@
 import { io, type Socket } from "socket.io-client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Header from "@/components/Header/Header";
 import HomeSidebar from "@/components/home/HomeSidebar";
 import NowPlayingPanel from "@/components/home/NowPlayingPanel";
@@ -42,6 +42,9 @@ type socket_collaborator_payload = {
   playlist_id: string;
   user?: playlist_socket_user;
 };
+
+const playlist_realtime_enabled =
+  String(process.env.NEXT_PUBLIC_PLAYLIST_REALTIME_ENABLED || "").trim() === "true";
 
 function sort_tracks_by_position(track_items: playlist_track[]) {
   return [...track_items].sort((left_item, right_item) => {
@@ -149,8 +152,10 @@ function user_initials(user: playlist_socket_user) {
 
 export default function PlaylistPage() {
   const params = useParams<{ id: string }>();
+  const search_params = useSearchParams();
   const raw_id = params?.id;
   const playlist_id = Array.isArray(raw_id) ? raw_id[0] : raw_id;
+  const invite_token = String(search_params?.get("invite") || "").trim();
 
   const {
     handleQueuePlay,
@@ -202,6 +207,19 @@ export default function PlaylistPage() {
 
       try {
         set_loading(true);
+        if (invite_token) {
+          const accept_response = await apiFetch(
+            `/playlists/invites/${encodeURIComponent(invite_token)}/accept`,
+            {
+              method: "POST",
+            },
+          );
+          if (!accept_response.ok && accept_response.status === 401) {
+            set_error("Войдите, чтобы принять приглашение");
+            return;
+          }
+        }
+
         const res = await apiFetch(`/playlists/${playlist_id}`);
 
         if (!res.ok) {
@@ -224,6 +242,12 @@ export default function PlaylistPage() {
             tracks: sort_tracks_by_position(data.tracks ?? []),
           });
           set_error(null);
+          if (invite_token && typeof window !== "undefined") {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("invite");
+            const next = `${url.pathname}${url.search}${url.hash}`;
+            window.history.replaceState({}, "", next);
+          }
         }
       } catch {
         if (mounted) {
@@ -241,10 +265,10 @@ export default function PlaylistPage() {
     return () => {
       mounted = false;
     };
-  }, [playlist_id]);
+  }, [playlist_id, invite_token]);
 
   useEffect(() => {
-    if (!playlist_id || loading || error) {
+    if (!playlist_realtime_enabled || !playlist_id || loading || error) {
       return;
     }
 

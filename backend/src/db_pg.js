@@ -11,6 +11,10 @@ function build_pg_config() {
   return {
     connectionString: config.PG_DATABASE_URL,
     ssl: config.PG_SSL ? { rejectUnauthorized: false } : false,
+    connectionTimeoutMillis: config.PG_CONNECT_TIMEOUT_MS,
+    query_timeout: config.PG_QUERY_TIMEOUT_MS,
+    idleTimeoutMillis: config.PG_IDLE_TIMEOUT_MS,
+    max: config.PG_MAX_CLIENTS,
   };
 }
 

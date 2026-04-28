@@ -4,6 +4,8 @@ import {
   resolve_search_limit,
   search_catalog,
 } from "../service/search.service.js";
+import { send_api_error } from "../utils/api-response.util.js";
+import { is_database_unavailable_error } from "../utils/database-error.util.js";
 
 export async function get_search_results(req, res) {
   try {
@@ -37,24 +39,42 @@ export async function get_search_results(req, res) {
     });
   } catch (err) {
     if (err?.message === "INVALID_SEARCH_TYPE") {
-      return res.status(400).json({
+      return send_api_error(res, {
+        status: 400,
+        code: "INVALID_SEARCH_TYPE",
         message: "Invalid type. Use all, tracks, artists or playlists.",
       });
     }
 
     if (err?.message === "INVALID_SEARCH_LIMIT") {
-      return res.status(400).json({
+      return send_api_error(res, {
+        status: 400,
+        code: "INVALID_SEARCH_LIMIT",
         message: "Invalid limit.",
       });
     }
 
     if (err?.message === "PG_DATABASE_URL_MISSING") {
-      return res.status(500).json({
+      return send_api_error(res, {
+        status: 500,
+        code: "PG_DATABASE_URL_MISSING",
         message: "PG_DATABASE_URL_MISSING",
       });
     }
 
+    if (is_database_unavailable_error(err)) {
+      return send_api_error(res, {
+        status: 503,
+        code: "DB_UNAVAILABLE",
+        message: "Database unavailable",
+      });
+    }
+
     console.error("Search API error:", err);
-    return res.status(500).json({ message: "Server error" });
+    return send_api_error(res, {
+      status: 500,
+      code: "SEARCH_FAILED",
+      message: "Server error",
+    });
   }
 }

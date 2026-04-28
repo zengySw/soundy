@@ -33,6 +33,25 @@ function normalize_invite_role(value) {
   return "editor";
 }
 
+function playlist_role_priority(role) {
+  if (role === "owner") {
+    return 3;
+  }
+  if (role === "editor") {
+    return 2;
+  }
+  if (role === "viewer") {
+    return 1;
+  }
+  return 0;
+}
+
+function resolve_stronger_role(left_role, right_role) {
+  return playlist_role_priority(left_role) >= playlist_role_priority(right_role)
+    ? left_role
+    : right_role;
+}
+
 function normalize_expires_days(value) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   if (!Number.isFinite(parsed)) {
@@ -483,5 +502,98 @@ export async function create_playlist_invite_for_user(playlist_id, user_id, payl
     token,
     role,
     expires_at: expires_at.toISOString(),
+  };
+}
+
+export async function accept_playlist_invite_for_user(token, user_id) {
+  const normalized_token = String(token || "").trim();
+  if (!normalized_token) {
+    throw new Error("PLAYLIST_INVITE_TOKEN_REQUIRED");
+  }
+
+  const invite_result = await pg_query(
+    `
+      SELECT
+        id::text AS id,
+        playlist_id::text AS playlist_id,
+        role,
+        expires_at,
+        revoked
+      FROM playlist_invites
+      WHERE token = $1
+      LIMIT 1
+    `,
+    [normalized_token],
+  );
+  const invite = invite_result.rows[0] ?? null;
+  if (!invite) {
+    throw new Error("PLAYLIST_INVITE_NOT_FOUND");
+  }
+  if (invite.revoked) {
+    throw new Error("PLAYLIST_INVITE_REVOKED");
+  }
+  if (invite.expires_at && new Date(invite.expires_at) <= new Date()) {
+    throw new Error("PLAYLIST_INVITE_EXPIRED");
+  }
+
+  const playlist_result = await pg_query(
+    `
+      SELECT owner_id::text AS owner_id
+      FROM playlists
+      WHERE id::text = $1
+      LIMIT 1
+    `,
+    [invite.playlist_id],
+  );
+  const playlist = playlist_result.rows[0] ?? null;
+  if (!playlist) {
+    throw new Error("PLAYLIST_NOT_FOUND");
+  }
+
+  const requested_role = normalize_invite_role(invite.role);
+  const owner_id = String(playlist.owner_id || "").trim();
+
+  const current_role_result = await pg_query(
+    `
+      SELECT role
+      FROM playlist_collaborators
+      WHERE playlist_id::text = $1
+        AND user_id::text = $2
+      LIMIT 1
+    `,
+    [invite.playlist_id, user_id],
+  );
+  const current_role = normalize_playlist_role(current_role_result.rows[0]?.role);
+
+  let next_role = user_id === owner_id ? "owner" : requested_role;
+  if (current_role) {
+    next_role = resolve_stronger_role(current_role, next_role);
+  }
+
+  await pg_query(
+    `
+      INSERT INTO playlist_collaborators (playlist_id, user_id, role)
+      VALUES ($1::uuid, $2::uuid, $3)
+      ON CONFLICT (playlist_id, user_id)
+      DO UPDATE SET role = EXCLUDED.role
+    `,
+    [invite.playlist_id, user_id, next_role],
+  );
+
+  await pg_query(
+    `
+      UPDATE playlist_invites
+      SET revoked = TRUE
+      WHERE id::text = $1
+    `,
+    [invite.id],
+  );
+
+  await touch_playlist(invite.playlist_id);
+
+  return {
+    accepted: true,
+    playlist_id: invite.playlist_id,
+    role: next_role,
   };
 }

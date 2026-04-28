@@ -3,6 +3,12 @@ import path from "path";
 import { parseFile } from "music-metadata";
 import { config } from "../config/env.js";
 import { pg_query } from "../db_pg.js";
+import {
+  get_media_driver,
+  normalize_media_key,
+  resolve_ads_read_payload,
+  resolve_media_read_payload,
+} from "./media_storage.service.js";
 
 const audio_extensions = new Set([
   ".opus",
@@ -23,23 +29,11 @@ let sync_promise = null;
 let last_sync_at = 0;
 
 function normalize_relative_path(input_path) {
-  return String(input_path || "").replace(/\\/g, "/").replace(/^\/+/, "");
+  return normalize_media_key(input_path);
 }
 
 function get_tracks_base_dir() {
   return path.resolve(config.TRACKS_BASE_DIR);
-}
-
-function resolve_media_absolute_path(relative_or_absolute_path) {
-  const tracks_base_dir = get_tracks_base_dir();
-  const absolute_path = path.resolve(tracks_base_dir, relative_or_absolute_path);
-  const safe_base_prefix = `${tracks_base_dir}${path.sep}`;
-
-  if (absolute_path !== tracks_base_dir && !absolute_path.startsWith(safe_base_prefix)) {
-    throw new Error("TRACK_PATH_OUTSIDE_BASE_DIR");
-  }
-
-  return absolute_path;
 }
 
 function normalize_track_title(input_title, fallback_value) {
@@ -94,7 +88,16 @@ function format_fallback_title_from_folder(folder_name) {
 }
 
 async function collect_track_candidates(current_dir, output) {
-  const entries = await fs.readdir(current_dir, { withFileTypes: true });
+  let entries = [];
+  try {
+    entries = await fs.readdir(current_dir, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+
   const files = entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
   const subdirs = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
 
@@ -263,6 +266,9 @@ export async function ensure_tracks_seeded() {
   if (count > 0) {
     return;
   }
+  if (get_media_driver() === "r2") {
+    return;
+  }
   await sync_tracks_from_filesystem({ force: true });
 }
 
@@ -314,8 +320,8 @@ export async function get_track_file_payload(track_id) {
 
   return {
     id: String(row.id),
-    path: normalize_relative_path(row.path),
-    cover_path: row.cover_path ? normalize_relative_path(row.cover_path) : null,
+    path: normalize_media_key(row.path),
+    cover_path: row.cover_path ? normalize_media_key(row.cover_path) : null,
     artist_id: row.artist_id ? String(row.artist_id) : null,
   };
 }
@@ -326,14 +332,12 @@ export async function resolve_track_audio_absolute_path(track_id) {
     return null;
   }
 
-  const absolute_path = resolve_media_absolute_path(track.path);
-  try {
-    await fs.access(absolute_path);
-  } catch {
+  const media_payload = await resolve_media_read_payload(track.path);
+  if (!media_payload) {
     return null;
   }
 
-  return { absolute_path, track };
+  return { ...media_payload, track };
 }
 
 export async function resolve_track_cover_absolute_path(track_id) {
@@ -342,28 +346,17 @@ export async function resolve_track_cover_absolute_path(track_id) {
     return null;
   }
 
-  const absolute_path = resolve_media_absolute_path(track.cover_path);
-  try {
-    await fs.access(absolute_path);
-  } catch {
+  const media_payload = await resolve_media_read_payload(track.cover_path);
+  if (!media_payload) {
     return null;
   }
 
-  return { absolute_path, track };
+  return { ...media_payload, track };
 }
 
 export async function resolve_ads_audio_absolute_path() {
   const ad_candidates = ["ad/ads.opus", "ad/ads.wav"];
-  for (const relative_path of ad_candidates) {
-    const absolute_path = resolve_media_absolute_path(relative_path);
-    try {
-      await fs.access(absolute_path);
-      return absolute_path;
-    } catch {
-      continue;
-    }
-  }
-  return null;
+  return resolve_ads_read_payload(ad_candidates);
 }
 
 export async function increment_track_play_count(track_id) {
